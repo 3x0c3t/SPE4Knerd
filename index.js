@@ -2,8 +2,8 @@
 
 /* =========================================================
    SPE4Knerd
-   V1.1
-   Interface + traduction + audio
+   V1.2
+   Interface + traduction + génération audio
    ========================================================= */
 
 
@@ -115,6 +115,10 @@ const state = {
 
     audioUrls: [],
 
+    audioSequence: [],
+
+    audioIndex: 0,
+
     generating: false
 
 };
@@ -147,26 +151,17 @@ function splitSentences(text) {
 
     }
 
-
     return text
 
         .replace(/\r\n/g, "\n")
 
         .replace(/\n+/g, " ")
 
-        .split(
-            /(?<=[.!?…。！？])\s+/
-        )
+        .split(/(?<=[.!?…。！？])\s+/)
 
-        .map(
-            sentence =>
-                sentence.trim()
-        )
+        .map(sentence => sentence.trim())
 
-        .filter(
-            sentence =>
-                sentence.length > 0
-        );
+        .filter(sentence => sentence.length > 0);
 
 }
 
@@ -194,10 +189,58 @@ function setAppStatus(text) {
 
     if (appStatus) {
 
-        appStatus.textContent =
-            text;
+        appStatus.textContent = text;
 
     }
+
+}
+
+
+/* =========================================================
+   LIBÉRATION DES AUDIO URL
+   ========================================================= */
+
+function revokeAudioUrls() {
+
+    state.audioUrls.forEach(url => {
+
+        try {
+
+            URL.revokeObjectURL(url);
+
+        } catch (error) {
+
+            console.warn(
+                "[AUDIO] Impossible de libérer URL:",
+                error
+            );
+
+        }
+
+    });
+
+    state.audioUrls = [];
+
+}
+
+
+/* =========================================================
+   ARRÊT AUDIO
+   ========================================================= */
+
+function stopAudio() {
+
+    if (!audioPlayer) {
+
+        return;
+
+    }
+
+    audioPlayer.pause();
+
+    audioPlayer.removeAttribute("src");
+
+    audioPlayer.load();
 
 }
 
@@ -248,7 +291,6 @@ function createSentenceElement(
     article.className =
         `sentence-item sentence-${type}`;
 
-
     const number =
         document.createElement("span");
 
@@ -265,10 +307,8 @@ function createSentenceElement(
     languageElement.className =
         "sentence-language";
 
-
     const languageInfo =
         languages[language];
-
 
     languageElement.textContent =
         languageInfo
@@ -286,18 +326,11 @@ function createSentenceElement(
         text;
 
 
-    article.appendChild(
-        number
-    );
+    article.appendChild(number);
 
-    article.appendChild(
-        languageElement
-    );
+    article.appendChild(languageElement);
 
-    article.appendChild(
-        textElement
-    );
-
+    article.appendChild(textElement);
 
     return article;
 
@@ -311,7 +344,6 @@ function createSentenceElement(
 function renderPreview() {
 
     preview.innerHTML = "";
-
 
     state.sentences.forEach(
         (sentence, index) => {
@@ -327,8 +359,7 @@ function renderPreview() {
 
             const translation =
                 state.translations[index]
-                ||
-                "Traduction à générer...";
+                || "Traduction à générer...";
 
 
             const translationElement =
@@ -369,13 +400,19 @@ async function translateSentences() {
     }
 
 
+    console.log(
+        "[TRANSLATE] Envoi:",
+        state.sentences.length,
+        "phrase(s)"
+    );
+
+
     const response =
         await fetch(
             "/api/translate",
             {
 
-                method:
-                    "POST",
+                method: "POST",
 
                 headers: {
 
@@ -384,19 +421,18 @@ async function translateSentences() {
 
                 },
 
-                body:
-                    JSON.stringify({
+                body: JSON.stringify({
 
-                        source:
-                            state.sourceLanguage,
+                    source:
+                        state.sourceLanguage,
 
-                        target:
-                            state.targetLanguage,
+                    target:
+                        state.targetLanguage,
 
-                        texts:
-                            state.sentences
+                    texts:
+                        state.sentences
 
-                    })
+                })
 
             }
         );
@@ -407,12 +443,10 @@ async function translateSentences() {
         let message =
             `Erreur HTTP ${response.status}`;
 
-
         try {
 
             const error =
                 await response.json();
-
 
             if (error.error) {
 
@@ -423,14 +457,11 @@ async function translateSentences() {
 
         } catch (_) {
 
-            /* Réponse non JSON */
+            /* réponse non JSON */
 
         }
 
-
-        throw new Error(
-            message
-        );
+        throw new Error(message);
 
     }
 
@@ -441,9 +472,7 @@ async function translateSentences() {
 
     if (
         !data.translations ||
-        !Array.isArray(
-            data.translations
-        )
+        !Array.isArray(data.translations)
     ) {
 
         throw new Error(
@@ -453,16 +482,33 @@ async function translateSentences() {
     }
 
 
+    /*
+     * Sécurité supplémentaire.
+     *
+     * L'API doit toujours retourner :
+     *
+     * [
+     *   "traduction 1",
+     *   "traduction 2",
+     *   "traduction 3"
+     * ]
+     *
+     */
+
     if (
         data.translations.length !==
         state.sentences.length
     ) {
 
         console.error(
-            "[TRANSLATE] Réponse reçue:",
-            data
+            "[TRANSLATE] Nombre reçu:",
+            data.translations.length
         );
 
+        console.error(
+            "[TRANSLATE] Nombre attendu:",
+            state.sentences.length
+        );
 
         throw new Error(
             "Nombre de traductions inattendu"
@@ -481,17 +527,24 @@ async function translateSentences() {
    ========================================================= */
 
 async function generateAudio(
+    language,
     text,
-    language
+    index,
+    total
 ) {
+
+    console.log(
+        `[AUDIO] ${index}/${total} ${language}:`,
+        text
+    );
+
 
     const response =
         await fetch(
             "/api/audio",
             {
 
-                method:
-                    "POST",
+                method: "POST",
 
                 headers: {
 
@@ -500,16 +553,13 @@ async function generateAudio(
 
                 },
 
-                body:
-                    JSON.stringify({
+                body: JSON.stringify({
 
-                        language:
-                            language,
+                    language,
 
-                        text:
-                            text
+                    text
 
-                    })
+                })
 
             }
         );
@@ -520,12 +570,10 @@ async function generateAudio(
         let message =
             `Erreur audio HTTP ${response.status}`;
 
-
         try {
 
             const error =
                 await response.json();
-
 
             if (error.error) {
 
@@ -536,14 +584,46 @@ async function generateAudio(
 
         } catch (_) {
 
-            /* Réponse non JSON */
+            /* réponse non JSON */
 
         }
 
+        throw new Error(message);
 
-        throw new Error(
-            message
+    }
+
+
+    const contentType =
+        response.headers.get(
+            "Content-Type"
         );
+
+
+    if (
+        !contentType ||
+        !contentType.includes("audio/wav")
+    ) {
+
+        let message =
+            "Réponse audio invalide";
+
+        try {
+
+            const textResponse =
+                await response.text();
+
+            console.error(
+                "[AUDIO] Réponse reçue:",
+                textResponse
+            );
+
+        } catch (_) {
+
+            /* rien */
+
+        }
+
+        throw new Error(message);
 
     }
 
@@ -564,63 +644,28 @@ async function generateAudio(
     }
 
 
-    return URL.createObjectURL(
-        blob
+    const url =
+        URL.createObjectURL(blob);
+
+
+    state.audioUrls.push(url);
+
+
+    console.log(
+        `[AUDIO] ${index}/${total} OK - ${blob.size} octets`
     );
+
+
+    return url;
 
 }
 
 
 /* =========================================================
-   LIBÉRATION DES AUDIO
+   CONSTRUCTION DE LA SÉQUENCE AUDIO
    ========================================================= */
 
-function revokeAudioUrls() {
-
-    state.audioUrls.forEach(
-        url => {
-
-            try {
-
-                URL.revokeObjectURL(
-                    url
-                );
-
-            } catch (_) {
-
-                /* Rien */
-
-            }
-
-        }
-    );
-
-
-    state.audioUrls = [];
-
-}
-
-
-/* =========================================================
-   GÉNÉRATION AUDIO COMPLÈTE
-   ========================================================= */
-
-async function generateAllAudio() {
-
-    revokeAudioUrls();
-
-
-    if (
-        state.sentences.length === 0
-    ) {
-
-        audioStatus.textContent =
-            "Audio non généré";
-
-        return;
-
-    }
-
+function buildAudioSequence() {
 
     const sequence = [];
 
@@ -631,10 +676,17 @@ async function generateAllAudio() {
         index++
     ) {
 
+        /*
+         * Phrase source
+         */
+
         sequence.push({
 
             number:
-                index + 1,
+                sequence.length + 1,
+
+            sentenceIndex:
+                index,
 
             language:
                 state.sourceLanguage,
@@ -648,10 +700,17 @@ async function generateAllAudio() {
         });
 
 
+        /*
+         * Traduction
+         */
+
         sequence.push({
 
             number:
-                index + 1,
+                sequence.length + 1,
+
+            sentenceIndex:
+                index,
 
             language:
                 state.targetLanguage,
@@ -660,92 +719,26 @@ async function generateAllAudio() {
                 state.translations[index],
 
             type:
-                "target"
+                "translation"
 
         });
 
     }
 
 
-    const audioUrls = [];
-
-
-    for (
-        let index = 0;
-        index < sequence.length;
-        index++
-    ) {
-
-        const item =
-            sequence[index];
-
-
-        const languageInfo =
-            languages[item.language];
-
-
-        audioStatus.textContent =
-            `Audio ${index + 1}/${sequence.length} : ` +
-            `${languageInfo ? languageInfo.code : item.language.toUpperCase()}`;
-
-
-        const url =
-            await generateAudio(
-                item.text,
-                item.language
-            );
-
-
-        audioUrls.push(
-            url
-        );
-
-    }
-
-
-    state.audioUrls =
-        audioUrls;
-
-
-    /*
-     * Le lecteur HTML ne peut lire qu'un fichier
-     * à la fois.
-     *
-     * On place donc le premier audio dans le lecteur.
-     * La séquence complète reste disponible dans
-     * state.audioUrls pour l'étape suivante.
-     */
-
-    if (
-        state.audioUrls.length > 0
-    ) {
-
-        audioPlayer.src =
-            state.audioUrls[0];
-
-        audioPlayer.load();
-
-    }
-
-
-    audioStatus.textContent =
-        `${sequence.length} audio généré(s)`;
+    return sequence;
 
 }
 
 
 /* =========================================================
-   LECTURE DE LA SÉQUENCE AUDIO
+   GÉNÉRATION DE TOUS LES AUDIOS
    ========================================================= */
 
-let audioSequenceIndex =
-    0;
-
-
-function playAudioSequence() {
+async function generateAllAudio() {
 
     if (
-        state.audioUrls.length === 0
+        state.audioSequence.length === 0
     ) {
 
         return;
@@ -753,64 +746,244 @@ function playAudioSequence() {
     }
 
 
-    audioSequenceIndex =
-        0;
+    revokeAudioUrls();
+
+    stopAudio();
 
 
-    playNextAudio();
+    state.audioSequence =
+        buildAudioSequence();
+
+
+    state.audioIndex = 0;
+
+
+    const total =
+        state.audioSequence.length;
+
+
+    console.log(
+        "[AUDIO] Séquence:",
+        state.audioSequence
+    );
+
+
+    for (
+        let index = 0;
+        index < total;
+        index++
+    ) {
+
+        const item =
+            state.audioSequence[index];
+
+
+        const current =
+            index + 1;
+
+
+        audioStatus.textContent =
+            `Audio ${current}/${total} — ${item.language.toUpperCase()}`;
+
+
+        setAppStatus(
+            `AUDIO ${current}/${total}`
+        );
+
+
+        const url =
+            await generateAudio(
+                item.language,
+                item.text,
+                current,
+                total
+            );
+
+
+        item.url =
+            url;
+
+    }
+
+
+    state.audioIndex = 0;
+
+
+    audioStatus.textContent =
+        `${total} audio(s) généré(s)`;
+
+
+    setAppStatus("READY");
+
+
+    /*
+     * Le premier audio est chargé.
+     *
+     * On ne force pas play() ici :
+     * les navigateurs peuvent bloquer l'autoplay
+     * après plusieurs requêtes réseau.
+     */
+
+    if (
+        state.audioSequence.length > 0
+    ) {
+
+        audioPlayer.src =
+            state.audioSequence[0].url;
+
+        audioPlayer.load();
+
+        audioPlayer.style.display =
+            "block";
+
+    }
 
 }
 
 
-function playNextAudio() {
+/* =========================================================
+   LECTURE DE LA SÉQUENCE
+   ========================================================= */
+
+function playAudioSequence() {
 
     if (
-        audioSequenceIndex >=
-        state.audioUrls.length
+        state.audioSequence.length === 0
     ) {
-
-        audioStatus.textContent =
-            `${state.audioUrls.length} audio terminé(s)`;
 
         return;
 
     }
 
 
-    const url =
-        state.audioUrls[
-            audioSequenceIndex
+    state.audioIndex = 0;
+
+
+    playCurrentAudio();
+
+}
+
+
+/* =========================================================
+   LECTURE AUDIO COURANTE
+   ========================================================= */
+
+async function playCurrentAudio() {
+
+    if (
+        state.audioIndex >=
+        state.audioSequence.length
+    ) {
+
+        audioStatus.textContent =
+            "Lecture terminée";
+
+        setAppStatus("READY");
+
+        return;
+
+    }
+
+
+    const item =
+        state.audioSequence[
+            state.audioIndex
         ];
 
 
+    if (!item.url) {
+
+        audioStatus.textContent =
+            "Audio indisponible";
+
+        setAppStatus("ERROR");
+
+        return;
+
+    }
+
+
     audioPlayer.src =
-        url;
+        item.url;
 
 
     audioPlayer.load();
 
 
-    audioPlayer.onended =
+    audioStatus.textContent =
+        `Lecture ${item.number}/${state.audioSequence.length} — ${item.language.toUpperCase()}`;
+
+
+    try {
+
+        await audioPlayer.play();
+
+    } catch (error) {
+
+        /*
+         * Autoplay bloqué par le navigateur.
+         * Le lecteur reste disponible avec son bouton Play.
+         */
+
+        console.warn(
+            "[AUDIO] Lecture automatique bloquée:",
+            error
+        );
+
+        audioStatus.textContent =
+            `Audio ${item.number}/${state.audioSequence.length} prêt — cliquez sur ▶`;
+
+    }
+
+}
+
+
+/* =========================================================
+   AUDIO TERMINÉ
+   ========================================================= */
+
+function handleAudioEnded() {
+
+    if (
+        state.audioSequence.length === 0
+    ) {
+
+        return;
+
+    }
+
+
+    state.audioIndex++;
+
+
+    if (
+        state.audioIndex >=
+        state.audioSequence.length
+    ) {
+
+        audioStatus.textContent =
+            "Lecture terminée";
+
+        setAppStatus("READY");
+
+        return;
+
+    }
+
+
+    /*
+     * Petit délai pour éviter que deux phrases
+     * soient collées acoustiquement.
+     */
+
+    setTimeout(
         () => {
 
-            audioSequenceIndex++;
+            playCurrentAudio();
 
-            playNextAudio();
-
-        };
-
-
-    audioPlayer.play()
-        .catch(
-            error => {
-
-                console.error(
-                    "[AUDIO] Lecture:",
-                    error
-                );
-
-            }
-        );
+        },
+        150
+    );
 
 }
 
@@ -821,9 +994,7 @@ function playNextAudio() {
 
 async function generate() {
 
-    if (
-        state.generating
-    ) {
+    if (state.generating) {
 
         return;
 
@@ -840,7 +1011,11 @@ async function generate() {
 
         state.translations = [];
 
+        state.audioSequence = [];
+
         revokeAudioUrls();
+
+        stopAudio();
 
         updateSentenceCounter();
 
@@ -849,9 +1024,7 @@ async function generate() {
         audioStatus.textContent =
             "Audio non généré";
 
-        setAppStatus(
-            "READY"
-        );
+        setAppStatus("READY");
 
         return;
 
@@ -866,25 +1039,27 @@ async function generate() {
         true;
 
 
-    setAppStatus(
-        "TRANSLATING"
-    );
+    /*
+     * Nettoyage de l'ancienne génération.
+     */
 
+    revokeAudioUrls();
 
-    audioStatus.textContent =
-        "Découpage des phrases...";
+    stopAudio();
+
+    state.audioSequence = [];
+
+    state.audioIndex = 0;
 
 
     try {
 
         /* ---------------------------------------------
-           PHRASES
+           DÉCOUPAGE
            --------------------------------------------- */
 
         state.sentences =
-            splitSentences(
-                text
-            );
+            splitSentences(text);
 
 
         state.translations =
@@ -927,6 +1102,10 @@ async function generate() {
         renderPreview();
 
 
+        audioStatus.textContent =
+            `${state.sentences.length} phrase(s) traduite(s)`;
+
+
         /* ---------------------------------------------
            AUDIO
            --------------------------------------------- */
@@ -939,13 +1118,17 @@ async function generate() {
         await generateAllAudio();
 
 
-        /* ---------------------------------------------
-           TERMINÉ
-           --------------------------------------------- */
+        /*
+         * Tout est prêt.
+         */
 
         setAppStatus(
             "READY"
         );
+
+
+        audioStatus.textContent =
+            `${state.audioSequence.length} audio(s) prêt(s)`;
 
 
     } catch (error) {
@@ -964,12 +1147,10 @@ async function generate() {
         audioStatus.textContent =
             `Erreur : ${error.message}`;
 
-
     } finally {
 
         state.generating =
             false;
-
 
         generateButton.disabled =
             false;
@@ -994,22 +1175,11 @@ function updateLanguages() {
 
 
     const source =
-        languages[
-            state.sourceLanguage
-        ];
+        languages[state.sourceLanguage];
 
 
     const target =
-        languages[
-            state.targetLanguage
-        ];
-
-
-    if (!source || !target) {
-
-        return;
-
-    }
+        languages[state.targetLanguage];
 
 
     audioMode.textContent =
@@ -1033,37 +1203,31 @@ function updateLanguages() {
 
 
     /*
-     * Changement de langue :
-     * les anciennes traductions/audio
-     * ne sont plus valables.
+     * Si du texte existe déjà,
+     * les anciennes traductions et les anciens
+     * audios ne correspondent plus aux langues.
      */
-
-    revokeAudioUrls();
-
-
-    state.translations =
-        [];
-
-
-    audioPlayer.removeAttribute(
-        "src"
-    );
-
-
-    audioPlayer.load();
-
 
     if (
         state.sentences.length > 0
     ) {
 
+        state.translations = [];
+
+        state.audioSequence = [];
+
+        state.audioIndex = 0;
+
+        revokeAudioUrls();
+
+        stopAudio();
+
         renderPreview();
 
+        audioStatus.textContent =
+            "Nouvelle langue sélectionnée";
+
     }
-
-
-    audioStatus.textContent =
-        "Audio non généré";
 
 }
 
@@ -1076,13 +1240,16 @@ function clearText() {
 
     revokeAudioUrls();
 
-
-    state.sentences =
-        [];
+    stopAudio();
 
 
-    state.translations =
-        [];
+    state.audioSequence = [];
+
+    state.audioIndex = 0;
+
+    state.sentences = [];
+
+    state.translations = [];
 
 
     sourceText.value =
@@ -1094,14 +1261,6 @@ function clearText() {
     updateSentenceCounter();
 
     renderEmptyPreview();
-
-
-    audioPlayer.removeAttribute(
-        "src"
-    );
-
-
-    audioPlayer.load();
 
 
     audioStatus.textContent =
@@ -1149,6 +1308,61 @@ targetLanguage.addEventListener(
 );
 
 
+/*
+ * Lecture automatique de la séquence
+ * quand un fichier arrive à la fin.
+ */
+
+if (audioPlayer) {
+
+    audioPlayer.addEventListener(
+        "ended",
+        handleAudioEnded
+    );
+
+}
+
+
+/*
+ * Si l'utilisateur appuie directement
+ * sur Play après génération, on synchronise
+ * l'index avec le fichier courant.
+ */
+
+if (audioPlayer) {
+
+    audioPlayer.addEventListener(
+        "play",
+        () => {
+
+            if (
+                state.audioSequence.length === 0
+            ) {
+
+                return;
+
+            }
+
+            /*
+             * L'utilisateur peut lancer le premier
+             * fichier manuellement.
+             */
+
+            if (
+                state.audioIndex >=
+                state.audioSequence.length
+            ) {
+
+                state.audioIndex = 0;
+
+            }
+
+        }
+    );
+
+}
+
+
 /* =========================================================
    INITIALISATION
    ========================================================= */
@@ -1164,3 +1378,11 @@ renderEmptyPreview();
 setAppStatus(
     "READY"
 );
+
+
+if (audioPlayer) {
+
+    audioPlayer.style.display =
+        "none";
+
+}
