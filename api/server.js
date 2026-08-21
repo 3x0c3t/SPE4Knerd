@@ -1,37 +1,75 @@
+"use strict";
+
 const express = require("express");
 const cors = require("cors");
 const fs = require("fs");
-const os = require("os");
 const path = require("path");
 const crypto = require("crypto");
 const { spawn } = require("child_process");
 
 const app = express();
 
+/* =========================================================
+   CONFIGURATION
+   ========================================================= */
+
 const PORT = 3003;
 
+const HOST =
+    process.env.HOST ||
+    "127.0.0.1";
+
 const LIBRETRANSLATE_URL =
+    process.env.LIBRETRANSLATE_URL ||
     "http://127.0.0.1:5000";
 
 const PIPER_BIN =
+    process.env.PIPER_BIN ||
     "/opt/piper/venv/bin/piper";
+
+const PIPER_VOICES_DIR =
+    process.env.PIPER_VOICES_DIR ||
+    "/opt/piper/voices";
+
+/* =========================================================
+   VOIX
+   ========================================================= */
 
 const VOICES = {
 
     fr: {
         name: "fr_FR-siwis-medium",
+
         model:
-            "/opt/piper/voices/fr_FR-siwis-medium.onnx"
+            path.join(
+                PIPER_VOICES_DIR,
+                "fr_FR-siwis-medium.onnx"
+            ),
+
+        config:
+            path.join(
+                PIPER_VOICES_DIR,
+                "fr_FR-siwis-medium.onnx.json"
+            )
     },
 
     es: {
         name: "es_MX-ald-medium",
+
         model:
-            "/opt/piper/voices/es_MX-ald-medium.onnx"
+            path.join(
+                PIPER_VOICES_DIR,
+                "es_MX-ald-medium.onnx"
+            ),
+
+        config:
+            path.join(
+                PIPER_VOICES_DIR,
+                "es_MX-ald-medium.onnx.json"
+            )
     }
 
 };
-
 
 /* =========================================================
    EXPRESS
@@ -49,6 +87,21 @@ app.use(
     })
 );
 
+/* =========================================================
+   STARTUP
+   ========================================================= */
+
+console.log("========================================");
+console.log(" SPE4Knerd API");
+console.log("========================================");
+console.log("Version    : 1.3.0");
+console.log("Port       :", PORT);
+console.log("Translation: LibreTranslate");
+console.log("LT URL     :", LIBRETRANSLATE_URL);
+console.log("Audio      : Piper");
+console.log("Piper      :", PIPER_BIN);
+console.log("Voices     :", PIPER_VOICES_DIR);
+console.log("========================================");
 
 /* =========================================================
    HEALTH
@@ -58,14 +111,25 @@ app.get("/api/health", (req, res) => {
 
     const voices = {};
 
-    for (const [language, voice] of Object.entries(VOICES)) {
+    for (
+        const [language, voice]
+        of Object.entries(VOICES)
+    ) {
 
         voices[language] = {
 
-            name: voice.name,
+            name:
+                voice.name,
+
+            model:
+                voice.model,
+
+            config:
+                voice.config,
 
             available:
-                fs.existsSync(voice.model)
+                fs.existsSync(voice.model) &&
+                fs.existsSync(voice.config)
 
         };
 
@@ -73,7 +137,8 @@ app.get("/api/health", (req, res) => {
 
     res.json({
 
-        status: "ok",
+        status:
+            "ok",
 
         service:
             "SPE4Knerd API",
@@ -87,9 +152,6 @@ app.get("/api/health", (req, res) => {
         translationEngine:
             "LibreTranslate",
 
-        translationUrl:
-            LIBRETRANSLATE_URL,
-
         audio:
             true,
 
@@ -99,12 +161,14 @@ app.get("/api/health", (req, res) => {
         piper:
             fs.existsSync(PIPER_BIN),
 
+        piperBinary:
+            PIPER_BIN,
+
         voices
 
     });
 
 });
-
 
 /* =========================================================
    TRANSLATION
@@ -120,34 +184,23 @@ app.post("/api/translate", async (req, res) => {
             texts
         } = req.body;
 
-
         /* ---------------------------------------------
            VALIDATION
            --------------------------------------------- */
 
-        if (!source) {
+        if (
+            typeof source !== "string" ||
+            typeof target !== "string"
+        ) {
 
             return res.status(400).json({
 
                 error:
-                    "Langue source manquante"
+                    "source et target sont obligatoires"
 
             });
 
         }
-
-
-        if (!target) {
-
-            return res.status(400).json({
-
-                error:
-                    "Langue cible manquante"
-
-            });
-
-        }
-
 
         if (!Array.isArray(texts)) {
 
@@ -160,21 +213,17 @@ app.post("/api/translate", async (req, res) => {
 
         }
 
-
         if (texts.length === 0) {
 
             return res.json({
 
                 source,
-
                 target,
-
                 translations: []
 
             });
 
         }
-
 
         if (texts.length > 100) {
 
@@ -187,11 +236,6 @@ app.post("/api/translate", async (req, res) => {
 
         }
 
-
-        /* ---------------------------------------------
-           NETTOYAGE
-           --------------------------------------------- */
-
         const cleanTexts =
             texts.map(text =>
                 typeof text === "string"
@@ -199,9 +243,8 @@ app.post("/api/translate", async (req, res) => {
                     : ""
             );
 
-
         /* ---------------------------------------------
-           SOURCE = TARGET
+           MÊME LANGUE
            --------------------------------------------- */
 
         if (source === target) {
@@ -209,7 +252,6 @@ app.post("/api/translate", async (req, res) => {
             return res.json({
 
                 source,
-
                 target,
 
                 translations:
@@ -218,7 +260,6 @@ app.post("/api/translate", async (req, res) => {
             });
 
         }
-
 
         /* ---------------------------------------------
            LIBRETRANSLATE
@@ -257,13 +298,11 @@ app.post("/api/translate", async (req, res) => {
                 }
             );
 
-
         const data =
             await response.json();
 
-
         /* ---------------------------------------------
-           ERROR LIBRETRANSLATE
+           ERREUR
            --------------------------------------------- */
 
         if (!response.ok) {
@@ -287,44 +326,17 @@ app.post("/api/translate", async (req, res) => {
 
         }
 
-
         /* ---------------------------------------------
            NORMALISATION
-           
-           LibreTranslate peut renvoyer :
-
-           {
-               translatedText: [
-                   "...",
-                   "...",
-                   "..."
-               ]
-           }
-
-           ou, selon le comportement/version :
-
-           {
-               translatedText: "..."
-           }
-
-           ou éventuellement un tableau
-           d'objets.
-
-           On normalise TOUJOURS vers :
-
-           translations: [
-               "...",
-               "...",
-               "..."
-           ]
            --------------------------------------------- */
 
         let translations = [];
 
-
         if (
             data &&
-            Array.isArray(data.translatedText)
+            Array.isArray(
+                data.translatedText
+            )
         ) {
 
             translations =
@@ -334,7 +346,8 @@ app.post("/api/translate", async (req, res) => {
 
         else if (
             data &&
-            typeof data.translatedText === "string"
+            typeof data.translatedText ===
+                "string"
         ) {
 
             translations = [
@@ -352,7 +365,8 @@ app.post("/api/translate", async (req, res) => {
 
                     if (
                         item &&
-                        typeof item.translatedText === "string"
+                        typeof item.translatedText ===
+                            "string"
                     ) {
 
                         return item.translatedText;
@@ -365,22 +379,8 @@ app.post("/api/translate", async (req, res) => {
 
         }
 
-
         /* ---------------------------------------------
-           SECURITE
-           --------------------------------------------- */
-
-        translations =
-            translations.map(
-                translation =>
-                    typeof translation === "string"
-                        ? translation
-                        : String(translation ?? "")
-            );
-
-
-        /* ---------------------------------------------
-           VERIFICATION DU NOMBRE
+           CONTRÔLE
            --------------------------------------------- */
 
         if (
@@ -410,24 +410,15 @@ app.post("/api/translate", async (req, res) => {
                     cleanTexts.length,
 
                 received:
-                    translations.length,
-
-                details:
-                    data
+                    translations.length
 
             });
 
         }
 
-
         console.log(
             `[TRANSLATE] ${cleanTexts.length} phrase(s) ${source} → ${target}`
         );
-
-
-        /* ---------------------------------------------
-           RESPONSE
-           --------------------------------------------- */
 
         return res.json({
 
@@ -438,7 +429,6 @@ app.post("/api/translate", async (req, res) => {
             translations
 
         });
-
 
     }
 
@@ -460,9 +450,204 @@ app.post("/api/translate", async (req, res) => {
 
 });
 
+/* =========================================================
+   PIPER
+   ========================================================= */
+
+function generateAudio(
+    text,
+    voice,
+    outputFile
+) {
+
+    return new Promise(
+        (resolve, reject) => {
+
+            console.log(
+                "[AUDIO] Piper démarrage"
+            );
+
+            console.log(
+                "[AUDIO] Model:",
+                voice.model
+            );
+
+            console.log(
+                "[AUDIO] Output:",
+                outputFile
+            );
+
+            const piper =
+                spawn(
+                    PIPER_BIN,
+                    [
+                        "--model",
+                        voice.model,
+
+                        "--config",
+                        voice.config,
+
+                        "--output_file",
+                        outputFile
+                    ],
+                    {
+                        stdio: [
+                            "pipe",
+                            "pipe",
+                            "pipe"
+                        ]
+                    }
+                );
+
+            let stdout = "";
+            let stderr = "";
+
+            /* -----------------------------------------
+               STDOUT
+               ----------------------------------------- */
+
+            piper.stdout.on(
+                "data",
+                data => {
+
+                    stdout +=
+                        data.toString();
+
+                }
+            );
+
+            /* -----------------------------------------
+               STDERR
+               ----------------------------------------- */
+
+            piper.stderr.on(
+                "data",
+                data => {
+
+                    const chunk =
+                        data.toString();
+
+                    stderr += chunk;
+
+                    console.error(
+                        "[PIPER]",
+                        chunk.trim()
+                    );
+
+                }
+            );
+
+            /* -----------------------------------------
+               ERREUR PROCESSUS
+               ----------------------------------------- */
+
+            piper.on(
+                "error",
+                error => {
+
+                    console.error(
+                        "[AUDIO] Piper process error:",
+                        error
+                    );
+
+                    reject(error);
+
+                }
+            );
+
+            /* -----------------------------------------
+               FIN
+               ----------------------------------------- */
+
+            piper.on(
+                "close",
+                code => {
+
+                    console.log(
+                        "[AUDIO] Piper terminé, code:",
+                        code
+                    );
+
+                    if (code !== 0) {
+
+                        const error =
+                            new Error(
+                                `Piper exited with code ${code}: ${stderr}`
+                            );
+
+                        reject(error);
+
+                        return;
+
+                    }
+
+                    if (
+                        !fs.existsSync(
+                            outputFile
+                        )
+                    ) {
+
+                        reject(
+                            new Error(
+                                "Piper terminé mais aucun WAV n'a été créé"
+                            )
+                        );
+
+                        return;
+
+                    }
+
+                    const stats =
+                        fs.statSync(
+                            outputFile
+                        );
+
+                    if (
+                        stats.size === 0
+                    ) {
+
+                        reject(
+                            new Error(
+                                "Piper a créé un fichier WAV vide"
+                            )
+                        );
+
+                        return;
+
+                    }
+
+                    console.log(
+                        "[AUDIO] WAV créé:",
+                        stats.size,
+                        "bytes"
+                    );
+
+                    resolve();
+
+                }
+            );
+
+            /* -----------------------------------------
+               ENVOI DU TEXTE À PIPER
+               ----------------------------------------- */
+
+            piper.stdin.write(
+                text.trim()
+            );
+
+            piper.stdin.write(
+                "\n"
+            );
+
+            piper.stdin.end();
+
+        }
+    );
+
+}
 
 /* =========================================================
-   AUDIO / PIPER
+   AUDIO API
    ========================================================= */
 
 app.post("/api/audio", async (req, res) => {
@@ -475,7 +660,6 @@ app.post("/api/audio", async (req, res) => {
             text,
             language
         } = req.body;
-
 
         /* ---------------------------------------------
            VALIDATION TEXTE
@@ -495,24 +679,26 @@ app.post("/api/audio", async (req, res) => {
 
         }
 
-
-        if (text.length > 1000) {
+        if (
+            text.length > 1000
+        ) {
 
             return res.status(400).json({
 
                 error:
-                    "Texte trop long (maximum 1000 caractères)"
+                    "Texte trop long"
 
             });
 
         }
 
-
         /* ---------------------------------------------
            VALIDATION LANGUE
            --------------------------------------------- */
 
-        if (!language) {
+        if (
+            typeof language !== "string"
+        ) {
 
             return res.status(400).json({
 
@@ -523,52 +709,51 @@ app.post("/api/audio", async (req, res) => {
 
         }
 
-
         const voice =
             VOICES[language];
-
 
         if (!voice) {
 
             return res.status(400).json({
 
                 error:
-                    "Langue audio non supportée",
-
-                supportedLanguages:
-                    Object.keys(VOICES)
+                    `Langue audio non supportée : ${language}`
 
             });
 
         }
 
-
         /* ---------------------------------------------
-           CHECK PIPER
+           PIPER
            --------------------------------------------- */
 
-        if (!fs.existsSync(PIPER_BIN)) {
-
-            console.error(
-                "[AUDIO] Piper introuvable:",
+        if (
+            !fs.existsSync(
                 PIPER_BIN
-            );
+            )
+        ) {
 
             return res.status(500).json({
 
                 error:
-                    "Moteur Piper introuvable"
+                    "Piper introuvable",
+
+                path:
+                    PIPER_BIN
 
             });
 
         }
 
-
         /* ---------------------------------------------
-           CHECK MODEL
+           MODÈLE
            --------------------------------------------- */
 
-        if (!fs.existsSync(voice.model)) {
+        if (
+            !fs.existsSync(
+                voice.model
+            )
+        ) {
 
             console.error(
                 "[AUDIO] Modèle introuvable:",
@@ -578,172 +763,93 @@ app.post("/api/audio", async (req, res) => {
             return res.status(500).json({
 
                 error:
-                    "Modèle vocal introuvable",
+                    "Modèle Piper introuvable",
 
-                language,
-
-                voice:
-                    voice.name
+                model:
+                    voice.model
 
             });
 
         }
 
+        /* ---------------------------------------------
+           CONFIG
+           --------------------------------------------- */
+
+        if (
+            !fs.existsSync(
+                voice.config
+            )
+        ) {
+
+            console.error(
+                "[AUDIO] Config introuvable:",
+                voice.config
+            );
+
+            return res.status(500).json({
+
+                error:
+                    "Configuration Piper introuvable",
+
+                config:
+                    voice.config
+
+            });
+
+        }
 
         /* ---------------------------------------------
            FICHIER TEMPORAIRE
            --------------------------------------------- */
 
         const id =
-            crypto.randomBytes(16)
+            crypto
+                .randomBytes(16)
                 .toString("hex");
 
         outputFile =
             path.join(
-                os.tmpdir(),
+                "/tmp",
                 `spe4knerd-${id}.wav`
             );
 
-
-        /* ---------------------------------------------
-           PIPER
-           --------------------------------------------- */
-
-        await new Promise(
-            (resolve, reject) => {
-
-                const piper =
-                    spawn(
-                        PIPER_BIN,
-                        [
-                            "--model",
-                            voice.model,
-
-                            "--output_file",
-                            outputFile
-                        ],
-                        {
-                            stdio: [
-                                "pipe",
-                                "pipe",
-                                "pipe"
-                            ]
-                        }
-                    );
-
-
-                let stderr = "";
-
-
-                piper.stderr.on(
-                    "data",
-                    data => {
-
-                        stderr +=
-                            data.toString();
-
-                    }
-                );
-
-
-                piper.on(
-                    "error",
-                    error => {
-
-                        reject(error);
-
-                    }
-                );
-
-
-                piper.on(
-                    "close",
-                    code => {
-
-                        if (code !== 0) {
-
-                            reject(
-                                new Error(
-                                    `Piper exit code ${code}: ${stderr}`
-                                )
-                            );
-
-                            return;
-
-                        }
-
-
-                        resolve();
-
-                    }
-                );
-
-
-                piper.stdin.write(
-                    text
-                );
-
-                piper.stdin.end();
-
-            }
+        console.log(
+            `[AUDIO] Génération ${language} ${voice.name}`
         );
 
-
         /* ---------------------------------------------
-           CHECK OUTPUT
+           GÉNÉRATION PIPER
            --------------------------------------------- */
 
-        if (
-            !fs.existsSync(outputFile)
-        ) {
+        await generateAudio(
+            text,
+            voice,
+            outputFile
+        );
 
-            throw new Error(
-                "Piper n'a pas généré le fichier WAV"
-            );
-
-        }
-
-
-        const stats =
-            fs.statSync(outputFile);
-
-
-        if (stats.size === 0) {
-
-            throw new Error(
-                "Le fichier WAV généré est vide"
-            );
-
-        }
-
+        /* ---------------------------------------------
+           ENVOI
+           --------------------------------------------- */
 
         console.log(
-            `[AUDIO] ${language} ${voice.name} ${stats.size} bytes`
+            "[AUDIO] Envoi:",
+            outputFile
         );
-
-
-        /* ---------------------------------------------
-           RESPONSE
-           --------------------------------------------- */
-
-        res.setHeader(
-            "Content-Type",
-            "audio/wav"
-        );
-
-        res.setHeader(
-            "Content-Length",
-            stats.size
-        );
-
-        res.setHeader(
-            "Cache-Control",
-            "no-store"
-        );
-
 
         res.sendFile(
             outputFile,
+            {
+                headers: {
+
+                    "Content-Type":
+                        "audio/wav",
+
+                    "Cache-Control":
+                        "no-store"
+
+                }
+            },
             error => {
 
                 if (error) {
@@ -753,41 +859,67 @@ app.post("/api/audio", async (req, res) => {
                         error
                     );
 
+                    if (
+                        !res.headersSent
+                    ) {
+
+                        res.status(
+                            error.statusCode ||
+                            500
+                        ).json({
+
+                            error:
+                                "Erreur lors de l'envoi audio"
+
+                        });
+
+                    }
+
                 }
 
+                /* -------------------------------------
+                   SUPPRESSION APRÈS ENVOI
+                   ------------------------------------- */
 
-                /* -----------------------------------------
-                   SUPPRESSION DU TEMPORAIRE
-                   ----------------------------------------- */
+                fs.unlink(
+                    outputFile,
+                    unlinkError => {
 
-                if (
-                    outputFile &&
-                    fs.existsSync(outputFile)
-                ) {
+                        if (
+                            unlinkError &&
+                            unlinkError.code !==
+                                "ENOENT"
+                        ) {
 
-                    fs.unlink(
-                        outputFile,
-                        unlinkError => {
-
-                            if (unlinkError) {
-
-                                console.error(
-                                    "[AUDIO] Suppression temporaire:",
-                                    unlinkError
-                                );
-
-                            }
+                            console.error(
+                                "[AUDIO] Nettoyage impossible:",
+                                unlinkError
+                            );
 
                         }
-                    );
 
-                    outputFile = null;
+                        else {
 
-                }
+                            console.log(
+                                "[AUDIO] Fichier temporaire supprimé"
+                            );
+
+                        }
+
+                    }
+                );
 
             }
         );
 
+        /*
+         * IMPORTANT :
+         *
+         * On ne met PAS outputFile = null ici.
+         *
+         * Le callback sendFile() doit pouvoir
+         * supprimer le fichier.
+         */
 
     }
 
@@ -798,6 +930,33 @@ app.post("/api/audio", async (req, res) => {
             error
         );
 
+        /* ---------------------------------------------
+           NETTOYAGE SI ERREUR AVANT sendFile()
+           --------------------------------------------- */
+
+        if (
+            outputFile &&
+            fs.existsSync(outputFile)
+        ) {
+
+            try {
+
+                fs.unlinkSync(
+                    outputFile
+                );
+
+            }
+
+            catch (cleanupError) {
+
+                console.error(
+                    "[AUDIO] Erreur nettoyage:",
+                    cleanupError
+                );
+
+            }
+
+        }
 
         if (
             !res.headersSent
@@ -806,7 +965,7 @@ app.post("/api/audio", async (req, res) => {
             return res.status(500).json({
 
                 error:
-                    "Erreur génération audio",
+                    "Erreur interne du serveur",
 
                 details:
                     error.message
@@ -815,70 +974,37 @@ app.post("/api/audio", async (req, res) => {
 
         }
 
-
-    }
-
-    finally {
-
-        /* ---------------------------------------------
-           CLEANUP SI REPONSE NON ENVOYEE
-           --------------------------------------------- */
-
-        if (
-            outputFile &&
-            fs.existsSync(outputFile)
-        ) {
-
-            fs.unlink(
-                outputFile,
-                error => {
-
-                    if (error) {
-
-                        console.error(
-                            "[AUDIO] Cleanup:",
-                            error
-                        );
-
-                    }
-
-                }
-            );
-
-        }
-
     }
 
 });
-
 
 /* =========================================================
    404
    ========================================================= */
 
 app.use(
+    "/api",
     (req, res) => {
 
         res.status(404).json({
 
             error:
-                "Route introuvable"
+                "Endpoint API introuvable"
 
         });
 
     }
 );
 
-
 /* =========================================================
-   ERROR HANDLER
+   ERREURS EXPRESS
    ========================================================= */
 
 app.use(
     (error, req, res, next) => {
 
         console.error(
-            "[SERVER] Error:",
+            "[EXPRESS] Error:",
             error
         );
 
@@ -893,61 +1019,24 @@ app.use(
         res.status(500).json({
 
             error:
-                "Erreur interne du serveur"
+                "Erreur serveur"
 
         });
 
     }
 );
 
-
 /* =========================================================
-   START
+   DÉMARRAGE
    ========================================================= */
 
 app.listen(
     PORT,
-    "127.0.0.1",
+    HOST,
     () => {
 
         console.log(
-            "========================================"
-        );
-
-        console.log(
-            " SPE4Knerd API"
-        );
-
-        console.log(
-            "========================================"
-        );
-
-        console.log(
-            `Version    : 1.3.0`
-        );
-
-        console.log(
-            `Port       : ${PORT}`
-        );
-
-        console.log(
-            `Translation: LibreTranslate`
-        );
-
-        console.log(
-            `LT URL     : ${LIBRETRANSLATE_URL}`
-        );
-
-        console.log(
-            `Audio      : Piper`
-        );
-
-        console.log(
-            `Piper      : ${PIPER_BIN}`
-        );
-
-        console.log(
-            "========================================"
+            `SPE4Knerd API listening on ${HOST}:${PORT}`
         );
 
     }
