@@ -4,172 +4,86 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#070b0e">
-
     <title>SPE4Knerd</title>
-
     <link rel="stylesheet" href="index.css">
     <link rel="stylesheet" href="css/mobile.css">
     <link rel="stylesheet" href="css/desktop.css">
     <link rel="stylesheet" href="css/tv.css">
 </head>
-
 <body>
 
 <div class="app">
 
-    <!-- =====================================================
-         HEADER
-         ===================================================== -->
-
     <header class="app-header">
-
         <div class="brand">
-            <div class="brand-title">
-                SPE4Knerd
-            </div>
-
-            <div class="brand-subtitle">
-                TRANSLATION AUDIO
-            </div>
+            <div class="brand-title">SPE4Knerd</div>
+            <div class="brand-subtitle">TRANSLATION AUDIO</div>
         </div>
 
         <div class="header-status">
             <span class="status-indicator"></span>
-            <span>READY</span>
+            <span id="appStatus">READY</span>
         </div>
-
     </header>
 
-
-    <!-- =====================================================
-         MAIN
-         ===================================================== -->
-
     <main class="main-content">
-
-
-        <!-- =================================================
-             CONFIGURATION
-             ================================================= -->
 
         <section class="panel configuration-panel">
 
             <div class="panel-header">
-
-                <h1>
-                    Configuration
-                </h1>
-
-                <span class="panel-index">
-                    01
-                </span>
-
+                <h1>Configuration</h1>
+                <span class="panel-index">01</span>
             </div>
-
 
             <div class="language-config">
 
-                <!-- SOURCE -->
-
                 <div class="language-box source-language">
-
                     <label for="sourceLanguage">
                         Langue source
                     </label>
 
                     <select id="sourceLanguage">
-
-                        <option value="fr">
-                            🇫🇷 Français
-                        </option>
-
-                        <option value="es">
-                            🇲🇽 Español
-                        </option>
-
-                        <option value="en">
-                            🇬🇧 English
-                        </option>
-
-                        <option value="de">
-                            🇩🇪 Deutsch
-                        </option>
-
-                        <option value="it">
-                            🇮🇹 Italiano
-                        </option>
-
+                        <option value="fr">🇫🇷 Français</option>
+                        <option value="es">🇲🇽 Español</option>
+                        <option value="en">🇬🇧 English</option>
+                        <option value="de">🇩🇪 Deutsch</option>
+                        <option value="it">🇮🇹 Italiano</option>
                     </select>
-
                 </div>
-
-
-                <!-- DIRECTION -->
 
                 <div class="language-direction" aria-hidden="true">
                     →
                 </div>
 
-
-                <!-- TARGET -->
-
                 <div class="language-box target-language">
-
                     <label for="targetLanguage">
                         Langue cible
                     </label>
 
                     <select id="targetLanguage">
-
-                        <option value="es">
-                            🇲🇽 Español
-                        </option>
-
-                        <option value="fr">
-                            🇫🇷 Français
-                        </option>
-
-                        <option value="en">
-                            🇬🇧 English
-                        </option>
-
-                        <option value="de">
-                            🇩🇪 Deutsch
-                        </option>
-
-                        <option value="it">
-                            🇮🇹 Italiano
-                        </option>
-
+                        <option value="es">🇲🇽 Español</option>
+                        <option value="fr">🇫🇷 Français</option>
+                        <option value="en">🇬🇧 English</option>
+                        <option value="de">🇩🇪 Deutsch</option>
+                        <option value="it">🇮🇹 Italiano</option>
                     </select>
-
                 </div>
 
             </div>
 
         </section>
 
-
-        <!-- =================================================
-             TEXTE SOURCE
-             ================================================= -->
-
         <section class="panel source-panel">
 
             <div class="panel-header">
-
-                <h2>
-                    Texte source
-                </h2>
+                <h2>Texte source</h2>
 
                 <span
                     class="panel-info"
-                    id="characterCount">
+                    id="characterCounter">
                     0 caractères
                 </span>
-
             </div>
-
 
             <div class="text-container">
 
@@ -180,7 +94,6 @@
                     spellcheck="true"></textarea>
 
             </div>
-
 
             <div class="panel-actions">
 
@@ -202,35 +115,23 @@
 
         </section>
 
-
-        <!-- =================================================
-             APERCU
-             ================================================= -->
-
         <section class="panel preview-panel">
 
             <div class="panel-header">
-
-                <h2>
-                    Aperçu
-                </h2>
+                <h2>Aperçu</h2>
 
                 <span
                     class="panel-info"
-                    id="sentenceCount">
+                    id="sentenceCounter">
                     0 phrases
                 </span>
-
             </div>
-
 
             <div
                 id="preview"
                 class="preview">
 
-                <div
-                    id="emptyPreview"
-                    class="empty-state">
+                <div class="empty-state">
 
                     <div class="empty-icon">
                         ⇅
@@ -250,112 +151,73 @@
 
         </section>
 
-
-        <!-- =================================================
-             AUDIO
-             ================================================= -->
-
         <section class="panel audio-panel">
 
             <div class="panel-header">
 
-                <h2>
-                    Audio
-                </h2>
+                <h2>Audio</h2>
 
-                <span class="panel-info">
+                <span
+                    class="panel-info"
+                    id="audioMode">
                     FR → ES
                 </span>
 
             </div>
 
-
             <div class="audio-sequence">
 
                 <div class="sequence-language">
-                    <span class="sequence-number">
-                        01
-                    </span>
-                    <span>
-                        🇫🇷 FR
-                    </span>
+                    <span class="sequence-number">01</span>
+                    <span id="sequenceSource">🇫🇷 FR</span>
                 </div>
 
-
-                <span class="sequence-arrow">
-                    →
-                </span>
-
+                <span class="sequence-arrow">→</span>
 
                 <div class="sequence-language">
-                    <span class="sequence-number">
-                        02
-                    </span>
-                    <span>
-                        🇲🇽 ES
-                    </span>
+                    <span class="sequence-number">02</span>
+                    <span id="sequenceTarget">🇲🇽 ES</span>
                 </div>
 
-
-                <span class="sequence-arrow">
-                    →
-                </span>
-
+                <span class="sequence-arrow">→</span>
 
                 <div class="sequence-language">
-                    <span class="sequence-number">
-                        03
-                    </span>
-                    <span>
-                        🇫🇷 FR
-                    </span>
+                    <span class="sequence-number">03</span>
+                    <span id="sequenceSource2">🇫🇷 FR</span>
                 </div>
 
-
-                <span class="sequence-arrow">
-                    →
-                </span>
-
+                <span class="sequence-arrow">→</span>
 
                 <div class="sequence-language">
-                    <span class="sequence-number">
-                        04
-                    </span>
-                    <span>
-                        🇲🇽 ES
-                    </span>
+                    <span class="sequence-number">04</span>
+                    <span id="sequenceTarget2">🇲🇽 ES</span>
                 </div>
 
             </div>
 
-
-            <div class="audio-status">
-                L'audio sera généré dans une prochaine version.
+            <div
+                class="audio-status"
+                id="audioStatus">
+                Audio non généré
             </div>
+
+            <audio
+                id="audioPlayer"
+                controls
+                preload="none"
+                style="display:none;">
+            </audio>
 
         </section>
 
     </main>
 
-
-    <!-- =====================================================
-         FOOTER
-         ===================================================== -->
-
     <footer class="app-footer">
-
-        <span>
-            SPE4Knerd
-        </span>
-
-        <span>
-            V1.0
-        </span>
-
+        <span>SPE4Knerd</span>
+        <span>V1.1</span>
     </footer>
 
 </div>
-
 
 <script src="index.js"></script>
 

@@ -7,11 +7,11 @@ const cors = require("cors");
 
 const app = express();
 
-const PORT = process.env.PORT || 3001;
+const PORT = Number(process.env.PORT) || 3001;
+const LIBRETRANSLATE_URL =
+    process.env.LIBRETRANSLATE_URL || "http://127.0.0.1:5000";
 
-const GOOGLE_TRANSLATE_API_KEY =
-    process.env.GOOGLE_TRANSLATE_API_KEY;
-
+const VERSION = "1.2.0";
 
 /* =========================================================
    MIDDLEWARE
@@ -24,7 +24,6 @@ app.use(
         limit: "1mb"
     })
 );
-
 
 /* =========================================================
    LOG
@@ -40,27 +39,126 @@ app.use((req, res, next) => {
 
 });
 
-
 /* =========================================================
    HEALTH
    ========================================================= */
 
-app.get("/api/health", (req, res) => {
+app.get("/api/health", async (req, res) => {
+
+    let translation = false;
+
+    try {
+
+        const response = await fetch(
+            `${LIBRETRANSLATE_URL}/languages`
+        );
+
+        translation = response.ok;
+
+    } catch (error) {
+
+        translation = false;
+
+    }
 
     res.json({
         status: "ok",
         service: "SPE4Knerd API",
-        version: "1.1.0",
-        translation: Boolean(
-            GOOGLE_TRANSLATE_API_KEY
-        )
+        version: VERSION,
+        translation,
+        translationEngine: "LibreTranslate",
+        translationUrl: LIBRETRANSLATE_URL
     });
 
 });
 
+/* =========================================================
+   LIBRETRANSLATE
+   ========================================================= */
+
+async function translateTexts(
+    source,
+    target,
+    texts
+) {
+
+    if (source === target) {
+
+        return texts;
+
+    }
+
+    const translations = [];
+
+    for (const text of texts) {
+
+        const response = await fetch(
+            `${LIBRETRANSLATE_URL}/translate`,
+            {
+                method: "POST",
+
+                headers: {
+                    "Content-Type": "application/json"
+                },
+
+                body: JSON.stringify({
+
+                    q: text,
+
+                    source: source,
+
+                    target: target,
+
+                    format: "text"
+
+                })
+            }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+
+            console.error(
+                "[TRANSLATE] LibreTranslate error:",
+                data
+            );
+
+            throw new Error(
+                data?.error ||
+                "Erreur LibreTranslate"
+            );
+
+        }
+
+        if (
+            typeof data.translatedText !==
+            "string"
+        ) {
+
+            console.error(
+                "[TRANSLATE] Réponse invalide:",
+                data
+            );
+
+            throw new Error(
+                "Réponse LibreTranslate invalide"
+            );
+
+        }
+
+        translations.push(
+            data.translatedText
+        );
+
+    }
+
+    return translations;
+
+}
 
 /* =========================================================
-   TRANSLATION
+   TRANSLATE
    ========================================================= */
 
 app.post("/api/translate", async (req, res) => {
@@ -72,7 +170,6 @@ app.post("/api/translate", async (req, res) => {
             target,
             texts
         } = req.body;
-
 
         /* ---------------------------------------------
            VALIDATION
@@ -86,7 +183,6 @@ app.post("/api/translate", async (req, res) => {
 
         }
 
-
         if (!target) {
 
             return res.status(400).json({
@@ -94,7 +190,6 @@ app.post("/api/translate", async (req, res) => {
             });
 
         }
-
 
         if (!Array.isArray(texts)) {
 
@@ -104,167 +199,70 @@ app.post("/api/translate", async (req, res) => {
 
         }
 
-
         if (texts.length === 0) {
 
             return res.json({
+                source,
+                target,
                 translations: []
             });
 
         }
 
-
         if (texts.length > 100) {
 
             return res.status(400).json({
-                error: "Maximum 100 phrases par requête"
-            });
-
-        }
-
-
-        /* ---------------------------------------------
-           SOURCE = TARGET
-           --------------------------------------------- */
-
-        if (source === target) {
-
-            return res.json({
-                translations: texts
-            });
-
-        }
-
-
-        /* ---------------------------------------------
-           GOOGLE API KEY
-           --------------------------------------------- */
-
-        if (!GOOGLE_TRANSLATE_API_KEY) {
-
-            console.error(
-                "[TRANSLATE] GOOGLE_TRANSLATE_API_KEY absente"
-            );
-
-            return res.status(500).json({
-                error: "Clé Google Translation non configurée"
-            });
-
-        }
-
-
-        /* ---------------------------------------------
-           GOOGLE TRANSLATE
-           --------------------------------------------- */
-
-        const googleUrl =
-            "https://translation.googleapis.com/language/translate/v2" +
-            `?key=${encodeURIComponent(
-                GOOGLE_TRANSLATE_API_KEY
-            )}`;
-
-
-        const googleResponse =
-            await fetch(
-                googleUrl,
-                {
-                    method: "POST",
-
-                    headers: {
-                        "Content-Type":
-                            "application/json"
-                    },
-
-                    body: JSON.stringify({
-
-                        q: texts,
-
-                        source: source,
-
-                        target: target,
-
-                        format: "text"
-
-                    })
-                }
-            );
-
-
-        const googleData =
-            await googleResponse.json();
-
-
-        /* ---------------------------------------------
-           GOOGLE ERROR
-           --------------------------------------------- */
-
-        if (!googleResponse.ok) {
-
-            console.error(
-                "[TRANSLATE] Google error:",
-                googleData
-            );
-
-            return res.status(
-                googleResponse.status
-            ).json({
-
                 error:
-                    "Erreur Google Translation",
-
-                details:
-                    googleData
-
+                    "Maximum 100 phrases par requête"
             });
 
         }
 
-
         /* ---------------------------------------------
-           RESPONSE
+           NETTOYAGE
            --------------------------------------------- */
 
-        const googleTranslations =
-            googleData?.data?.translations;
-
+        const cleanTexts = texts.map(
+            text => String(text).trim()
+        );
 
         if (
-            !Array.isArray(
-                googleTranslations
+            cleanTexts.some(
+                text => text.length === 0
             )
         ) {
 
-            console.error(
-                "[TRANSLATE] Réponse Google invalide:",
-                googleData
-            );
-
-            return res.status(502).json({
+            return res.status(400).json({
                 error:
-                    "Réponse Google Translation invalide"
+                    "Une ou plusieurs phrases sont vides"
             });
 
         }
 
+        /* ---------------------------------------------
+           TRANSLATION
+           --------------------------------------------- */
 
         const translations =
-            googleTranslations.map(
-                item =>
-                    item.translatedText
+            await translateTexts(
+                source,
+                target,
+                cleanTexts
             );
 
-
         console.log(
-            `[TRANSLATE] ${texts.length} phrase(s) ${source} → ${target}`
+            `[TRANSLATE] ${cleanTexts.length} phrase(s) ${source} → ${target}`
         );
 
-
         return res.json({
-            source,
-            target,
-            translations
-        });
 
+            source,
+
+            target,
+
+            translations
+
+        });
 
     } catch (error) {
 
@@ -273,15 +271,199 @@ app.post("/api/translate", async (req, res) => {
             error
         );
 
-        return res.status(500).json({
+        return res.status(502).json({
+
             error:
-                "Erreur interne du serveur"
+                "Erreur du moteur de traduction",
+
+            details:
+                error.message
+
         });
 
     }
 
 });
 
+/* =========================================================
+   SENTENCE SPLITTER
+   ========================================================= */
+
+function splitSentences(text) {
+
+    return text
+        .replace(/\r\n/g, "\n")
+        .replace(/\r/g, "\n")
+        .split(
+            /(?<=[.!?…])\s+|\n+/
+        )
+        .map(
+            sentence =>
+                sentence.trim()
+        )
+        .filter(
+            sentence =>
+                sentence.length > 0
+        );
+
+}
+
+/* =========================================================
+   PROCESS FULL TEXT
+   ========================================================= */
+
+app.post("/api/process", async (req, res) => {
+
+    try {
+
+        const {
+            source,
+            target,
+            text
+        } = req.body;
+
+        /* ---------------------------------------------
+           VALIDATION
+           --------------------------------------------- */
+
+        if (!source) {
+
+            return res.status(400).json({
+                error:
+                    "Langue source manquante"
+            });
+
+        }
+
+        if (!target) {
+
+            return res.status(400).json({
+                error:
+                    "Langue cible manquante"
+            });
+
+        }
+
+        if (
+            typeof text !== "string" ||
+            text.trim().length === 0
+        ) {
+
+            return res.status(400).json({
+                error:
+                    "Texte source manquant"
+            });
+
+        }
+
+        /* ---------------------------------------------
+           SPLIT
+           --------------------------------------------- */
+
+        const sentences =
+            splitSentences(text);
+
+        if (sentences.length === 0) {
+
+            return res.json({
+
+                source,
+
+                target,
+
+                sentenceCount: 0,
+
+                sentences: []
+
+            });
+
+        }
+
+        if (sentences.length > 100) {
+
+            return res.status(400).json({
+
+                error:
+                    "Maximum 100 phrases par texte"
+
+            });
+
+        }
+
+        /* ---------------------------------------------
+           TRANSLATION
+           --------------------------------------------- */
+
+        const translations =
+            await translateTexts(
+                source,
+                target,
+                sentences
+            );
+
+        /* ---------------------------------------------
+           BUILD RESULT
+           --------------------------------------------- */
+
+        const result =
+            sentences.map(
+                (sentence, index) => ({
+
+                    id: index + 1,
+
+                    source:
+                        sentence,
+
+                    translation:
+                        translations[index],
+
+                    sourceLang:
+                        source,
+
+                    targetLang:
+                        target
+
+                })
+            );
+
+        console.log(
+            `[PROCESS] ${sentences.length} phrase(s) ${source} → ${target}`
+        );
+
+        return res.json({
+
+            source,
+
+            target,
+
+            sentenceCount:
+                result.length,
+
+            sentences:
+                result
+
+        });
+
+    } catch (error) {
+
+        console.error(
+            "[PROCESS] Exception:",
+            error
+        );
+
+        return res.status(502).json({
+
+            error:
+                "Erreur lors du traitement du texte",
+
+            details:
+                error.message
+
+        });
+
+    }
+
+});
 
 /* =========================================================
    AUDIO
@@ -292,15 +474,14 @@ app.post("/api/audio", async (req, res) => {
     return res.status(501).json({
 
         error:
-            "Génération audio non disponible en V1.1",
+            "Génération audio non disponible",
 
         message:
-            "Le moteur audio sera ajouté dans une prochaine version."
+            "Le moteur audio sera ajouté ultérieurement."
 
     });
 
 });
-
 
 /* =========================================================
    404
@@ -317,27 +498,27 @@ app.use((req, res) => {
 
 });
 
-
 /* =========================================================
    ERROR HANDLER
    ========================================================= */
 
-app.use((error, req, res, next) => {
+app.use(
+    (error, req, res, next) => {
 
-    console.error(
-        "[API] ERROR:",
-        error
-    );
+        console.error(
+            "[API] ERROR:",
+            error
+        );
 
-    res.status(500).json({
+        res.status(500).json({
 
-        error:
-            "Erreur interne du serveur"
+            error:
+                "Erreur interne du serveur"
 
-    });
+        });
 
-});
-
+    }
+);
 
 /* =========================================================
    START
@@ -361,15 +542,19 @@ app.listen(
         );
 
         console.log(
+            `Version    : ${VERSION}`
+        );
+
+        console.log(
             `Port       : ${PORT}`
         );
 
         console.log(
-            `Translation: ${
-                GOOGLE_TRANSLATE_API_KEY
-                    ? "CONFIGURED"
-                    : "NOT CONFIGURED"
-            }`
+            `Translation: LibreTranslate`
+        );
+
+        console.log(
+            `LT URL     : ${LIBRETRANSLATE_URL}`
         );
 
         console.log(
