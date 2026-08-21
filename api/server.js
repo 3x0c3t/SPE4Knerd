@@ -1,7 +1,3 @@
-"use strict";
-
-require("dotenv").config();
-
 const express = require("express");
 const cors = require("cors");
 const fs = require("fs");
@@ -12,79 +8,46 @@ const { spawn } = require("child_process");
 
 const app = express();
 
-
-/* =========================================================
-   CONFIGURATION
-   ========================================================= */
-
-const PORT = Number(process.env.PORT || 3003);
+const PORT = 3003;
 
 const LIBRETRANSLATE_URL =
-    process.env.LIBRETRANSLATE_URL ||
     "http://127.0.0.1:5000";
 
 const PIPER_BIN =
-    process.env.PIPER_BIN ||
     "/opt/piper/venv/bin/piper";
-
-const PIPER_VOICES_DIR =
-    process.env.PIPER_VOICES_DIR ||
-    "/opt/piper/voices";
-
-const VERSION = "1.3.0";
-
-
-/* =========================================================
-   VOIX
-   ========================================================= */
 
 const VOICES = {
 
     fr: {
         name: "fr_FR-siwis-medium",
-        model: path.join(
-            PIPER_VOICES_DIR,
-            "fr_FR-siwis-medium.onnx"
-        )
+        model:
+            "/opt/piper/voices/fr_FR-siwis-medium.onnx"
     },
 
     es: {
         name: "es_MX-ald-medium",
-        model: path.join(
-            PIPER_VOICES_DIR,
-            "es_MX-ald-medium.onnx"
-        )
+        model:
+            "/opt/piper/voices/es_MX-ald-medium.onnx"
     }
 
 };
 
 
 /* =========================================================
-   MIDDLEWARE
+   EXPRESS
    ========================================================= */
 
-app.use(cors());
+app.use(
+    cors({
+        origin: "*"
+    })
+);
 
 app.use(
     express.json({
         limit: "1mb"
     })
 );
-
-
-/* =========================================================
-   LOG
-   ========================================================= */
-
-app.use((req, res, next) => {
-
-    console.log(
-        `[API] ${req.method} ${req.path}`
-    );
-
-    next();
-
-});
 
 
 /* =========================================================
@@ -98,8 +61,12 @@ app.get("/api/health", (req, res) => {
     for (const [language, voice] of Object.entries(VOICES)) {
 
         voices[language] = {
+
             name: voice.name,
-            available: fs.existsSync(voice.model)
+
+            available:
+                fs.existsSync(voice.model)
+
         };
 
     }
@@ -112,7 +79,7 @@ app.get("/api/health", (req, res) => {
             "SPE4Knerd API",
 
         version:
-            VERSION,
+            "1.3.0",
 
         translation:
             true,
@@ -199,7 +166,9 @@ app.post("/api/translate", async (req, res) => {
             return res.json({
 
                 source,
+
                 target,
+
                 translations: []
 
             });
@@ -220,6 +189,18 @@ app.post("/api/translate", async (req, res) => {
 
 
         /* ---------------------------------------------
+           NETTOYAGE
+           --------------------------------------------- */
+
+        const cleanTexts =
+            texts.map(text =>
+                typeof text === "string"
+                    ? text.trim()
+                    : ""
+            );
+
+
+        /* ---------------------------------------------
            SOURCE = TARGET
            --------------------------------------------- */
 
@@ -228,8 +209,11 @@ app.post("/api/translate", async (req, res) => {
             return res.json({
 
                 source,
+
                 target,
-                translations: texts
+
+                translations:
+                    cleanTexts
 
             });
 
@@ -245,7 +229,8 @@ app.post("/api/translate", async (req, res) => {
                 `${LIBRETRANSLATE_URL}/translate`,
                 {
 
-                    method: "POST",
+                    method:
+                        "POST",
 
                     headers: {
 
@@ -254,17 +239,20 @@ app.post("/api/translate", async (req, res) => {
 
                     },
 
-                    body: JSON.stringify({
+                    body:
+                        JSON.stringify({
 
-                        q: texts,
+                            q:
+                                cleanTexts,
 
-                        source,
+                            source,
 
-                        target,
+                            target,
 
-                        format: "text"
+                            format:
+                                "text"
 
-                    })
+                        })
 
                 }
             );
@@ -275,7 +263,7 @@ app.post("/api/translate", async (req, res) => {
 
 
         /* ---------------------------------------------
-           ERROR
+           ERROR LIBRETRANSLATE
            --------------------------------------------- */
 
         if (!response.ok) {
@@ -302,20 +290,52 @@ app.post("/api/translate", async (req, res) => {
 
         /* ---------------------------------------------
            NORMALISATION
+           
+           LibreTranslate peut renvoyer :
+
+           {
+               translatedText: [
+                   "...",
+                   "...",
+                   "..."
+               ]
+           }
+
+           ou, selon le comportement/version :
+
+           {
+               translatedText: "..."
+           }
+
+           ou éventuellement un tableau
+           d'objets.
+
+           On normalise TOUJOURS vers :
+
+           translations: [
+               "...",
+               "...",
+               "..."
+           ]
            --------------------------------------------- */
 
-        let translations;
+        let translations = [];
 
 
-        if (Array.isArray(data)) {
+        if (
+            data &&
+            Array.isArray(data.translatedText)
+        ) {
 
             translations =
-                data.map(
-                    item =>
-                        item.translatedText
-                );
+                data.translatedText;
 
-        } else {
+        }
+
+        else if (
+            data &&
+            typeof data.translatedText === "string"
+        ) {
 
             translations = [
                 data.translatedText
@@ -323,11 +343,91 @@ app.post("/api/translate", async (req, res) => {
 
         }
 
+        else if (
+            Array.isArray(data)
+        ) {
+
+            translations =
+                data.map(item => {
+
+                    if (
+                        item &&
+                        typeof item.translatedText === "string"
+                    ) {
+
+                        return item.translatedText;
+
+                    }
+
+                    return "";
+
+                });
+
+        }
+
+
+        /* ---------------------------------------------
+           SECURITE
+           --------------------------------------------- */
+
+        translations =
+            translations.map(
+                translation =>
+                    typeof translation === "string"
+                        ? translation
+                        : String(translation ?? "")
+            );
+
+
+        /* ---------------------------------------------
+           VERIFICATION DU NOMBRE
+           --------------------------------------------- */
+
+        if (
+            translations.length !==
+            cleanTexts.length
+        ) {
+
+            console.error(
+                "[TRANSLATE] Nombre inattendu:",
+                {
+                    expected:
+                        cleanTexts.length,
+
+                    received:
+                        translations.length,
+
+                    data
+                }
+            );
+
+            return res.status(502).json({
+
+                error:
+                    "Nombre de traductions inattendu",
+
+                expected:
+                    cleanTexts.length,
+
+                received:
+                    translations.length,
+
+                details:
+                    data
+
+            });
+
+        }
+
 
         console.log(
-            `[TRANSLATE] ${texts.length} phrase(s) ${source} → ${target}`
+            `[TRANSLATE] ${cleanTexts.length} phrase(s) ${source} → ${target}`
         );
 
+
+        /* ---------------------------------------------
+           RESPONSE
+           --------------------------------------------- */
 
         return res.json({
 
@@ -340,7 +440,9 @@ app.post("/api/translate", async (req, res) => {
         });
 
 
-    } catch (error) {
+    }
+
+    catch (error) {
 
         console.error(
             "[TRANSLATE] Exception:",
@@ -360,7 +462,7 @@ app.post("/api/translate", async (req, res) => {
 
 
 /* =========================================================
-   AUDIO
+   AUDIO / PIPER
    ========================================================= */
 
 app.post("/api/audio", async (req, res) => {
@@ -376,7 +478,7 @@ app.post("/api/audio", async (req, res) => {
 
 
         /* ---------------------------------------------
-           VALIDATION
+           VALIDATION TEXTE
            --------------------------------------------- */
 
         if (
@@ -405,6 +507,10 @@ app.post("/api/audio", async (req, res) => {
 
         }
 
+
+        /* ---------------------------------------------
+           VALIDATION LANGUE
+           --------------------------------------------- */
 
         if (!language) {
 
@@ -485,7 +591,7 @@ app.post("/api/audio", async (req, res) => {
 
 
         /* ---------------------------------------------
-           TEMP FILE
+           FICHIER TEMPORAIRE
            --------------------------------------------- */
 
         const id =
@@ -503,11 +609,6 @@ app.post("/api/audio", async (req, res) => {
            PIPER
            --------------------------------------------- */
 
-        console.log(
-            `[AUDIO] ${language} → ${voice.name}`
-        );
-
-
         await new Promise(
             (resolve, reject) => {
 
@@ -515,22 +616,18 @@ app.post("/api/audio", async (req, res) => {
                     spawn(
                         PIPER_BIN,
                         [
-
                             "--model",
                             voice.model,
 
                             "--output_file",
                             outputFile
-
                         ],
                         {
-
                             stdio: [
                                 "pipe",
-                                "ignore",
+                                "pipe",
                                 "pipe"
                             ]
-
                         }
                     );
 
@@ -540,10 +637,10 @@ app.post("/api/audio", async (req, res) => {
 
                 piper.stderr.on(
                     "data",
-                    chunk => {
+                    data => {
 
                         stderr +=
-                            chunk.toString();
+                            data.toString();
 
                     }
                 );
@@ -567,7 +664,7 @@ app.post("/api/audio", async (req, res) => {
 
                             reject(
                                 new Error(
-                                    `Piper exited with code ${code}: ${stderr}`
+                                    `Piper exit code ${code}: ${stderr}`
                                 )
                             );
 
@@ -583,7 +680,7 @@ app.post("/api/audio", async (req, res) => {
 
 
                 piper.stdin.write(
-                    text.trim()
+                    text
                 );
 
                 piper.stdin.end();
@@ -601,7 +698,7 @@ app.post("/api/audio", async (req, res) => {
         ) {
 
             throw new Error(
-                "Piper n'a produit aucun fichier audio"
+                "Piper n'a pas généré le fichier WAV"
             );
 
         }
@@ -614,14 +711,14 @@ app.post("/api/audio", async (req, res) => {
         if (stats.size === 0) {
 
             throw new Error(
-                "Le fichier audio est vide"
+                "Le fichier WAV généré est vide"
             );
 
         }
 
 
         console.log(
-            `[AUDIO] WAV généré: ${stats.size} octets`
+            `[AUDIO] ${language} ${voice.name} ${stats.size} bytes`
         );
 
 
@@ -645,44 +742,56 @@ app.post("/api/audio", async (req, res) => {
         );
 
 
-        const stream =
-            fs.createReadStream(
-                outputFile
-            );
-
-
-        stream.on(
-            "error",
+        res.sendFile(
+            outputFile,
             error => {
 
-                console.error(
-                    "[AUDIO] Stream error:",
-                    error
-                );
+                if (error) {
+
+                    console.error(
+                        "[AUDIO] sendFile error:",
+                        error
+                    );
+
+                }
+
+
+                /* -----------------------------------------
+                   SUPPRESSION DU TEMPORAIRE
+                   ----------------------------------------- */
+
+                if (
+                    outputFile &&
+                    fs.existsSync(outputFile)
+                ) {
+
+                    fs.unlink(
+                        outputFile,
+                        unlinkError => {
+
+                            if (unlinkError) {
+
+                                console.error(
+                                    "[AUDIO] Suppression temporaire:",
+                                    unlinkError
+                                );
+
+                            }
+
+                        }
+                    );
+
+                    outputFile = null;
+
+                }
 
             }
         );
 
 
-        stream.on(
-            "close",
-            () => {
+    }
 
-                fs.unlink(
-                    outputFile,
-                    () => {}
-                );
-
-                outputFile = null;
-
-            }
-        );
-
-
-        stream.pipe(res);
-
-
-    } catch (error) {
+    catch (error) {
 
         console.error(
             "[AUDIO] Exception:",
@@ -691,26 +800,50 @@ app.post("/api/audio", async (req, res) => {
 
 
         if (
+            !res.headersSent
+        ) {
+
+            return res.status(500).json({
+
+                error:
+                    "Erreur génération audio",
+
+                details:
+                    error.message
+
+            });
+
+        }
+
+
+    }
+
+    finally {
+
+        /* ---------------------------------------------
+           CLEANUP SI REPONSE NON ENVOYEE
+           --------------------------------------------- */
+
+        if (
             outputFile &&
             fs.existsSync(outputFile)
         ) {
 
             fs.unlink(
                 outputFile,
-                () => {}
+                error => {
+
+                    if (error) {
+
+                        console.error(
+                            "[AUDIO] Cleanup:",
+                            error
+                        );
+
+                    }
+
+                }
             );
-
-        }
-
-
-        if (!res.headersSent) {
-
-            return res.status(500).json({
-
-                error:
-                    "Erreur lors de la génération audio"
-
-            });
 
         }
 
@@ -723,16 +856,18 @@ app.post("/api/audio", async (req, res) => {
    404
    ========================================================= */
 
-app.use((req, res) => {
+app.use(
+    (req, res) => {
 
-    res.status(404).json({
+        res.status(404).json({
 
-        error:
-            "Endpoint introuvable"
+            error:
+                "Route introuvable"
 
-    });
+        });
 
-});
+    }
+);
 
 
 /* =========================================================
@@ -743,7 +878,7 @@ app.use(
     (error, req, res, next) => {
 
         console.error(
-            "[API] ERROR:",
+            "[SERVER] Error:",
             error
         );
 
@@ -788,7 +923,7 @@ app.listen(
         );
 
         console.log(
-            `Version    : ${VERSION}`
+            `Version    : 1.3.0`
         );
 
         console.log(
@@ -796,7 +931,7 @@ app.listen(
         );
 
         console.log(
-            "Translation: LibreTranslate"
+            `Translation: LibreTranslate`
         );
 
         console.log(
@@ -804,7 +939,7 @@ app.listen(
         );
 
         console.log(
-            "Audio      : Piper"
+            `Audio      : Piper`
         );
 
         console.log(

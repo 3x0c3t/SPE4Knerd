@@ -1,9 +1,10 @@
 "use strict";
 
+
 /* =========================================================
    SPE4Knerd
-   V1.1
-   Interface + traduction + préparation audio
+   V1.0
+   Interface + découpage des phrases
    ========================================================= */
 
 
@@ -56,9 +57,6 @@ const sequenceSource2 =
 const sequenceTarget2 =
     document.getElementById("sequenceTarget2");
 
-const appStatus =
-    document.getElementById("appStatus");
-
 
 /* =========================================================
    LANGUES
@@ -76,24 +74,6 @@ const languages = {
         code: "ES",
         name: "Español",
         flag: "🇲🇽"
-    },
-
-    en: {
-        code: "EN",
-        name: "English",
-        flag: "🇬🇧"
-    },
-
-    de: {
-        code: "DE",
-        name: "Deutsch",
-        flag: "🇩🇪"
-    },
-
-    it: {
-        code: "IT",
-        name: "Italiano",
-        flag: "🇮🇹"
     }
 
 };
@@ -109,13 +89,7 @@ const state = {
 
     targetLanguage: "es",
 
-    sentences: [],
-
-    translations: [],
-
-    audioUrls: [],
-
-    generating: false
+    sentences: []
 
 };
 
@@ -128,6 +102,7 @@ function updateCharacterCounter() {
 
     const count =
         sourceText.value.length;
+
 
     characterCounter.textContent =
         `${count} caractère${count === 1 ? "" : "s"}`;
@@ -142,8 +117,27 @@ function updateCharacterCounter() {
 function splitSentences(text) {
 
     if (!text.trim()) {
+
         return [];
+
     }
+
+
+    /*
+     * V1 :
+     *
+     * Découpage sur :
+     *
+     * .
+     * !
+     * ?
+     * …
+     * ponctuation espagnole
+     * ponctuation chinoise/japonaise
+     *
+     * Les versions suivantes pourront utiliser
+     * une logique beaucoup plus avancée.
+     */
 
     return text
 
@@ -169,21 +163,9 @@ function updateSentenceCounter() {
     const count =
         state.sentences.length;
 
+
     sentenceCounter.textContent =
         `${count} phrase${count === 1 ? "" : "s"}`;
-
-}
-
-
-/* =========================================================
-   STATUT APPLICATION
-   ========================================================= */
-
-function setAppStatus(text) {
-
-    if (appStatus) {
-        appStatus.textContent = text;
-    }
 
 }
 
@@ -231,8 +213,10 @@ function createSentenceElement(
     const article =
         document.createElement("article");
 
+
     article.className =
         `sentence-item sentence-${type}`;
+
 
     const number =
         document.createElement("span");
@@ -250,13 +234,8 @@ function createSentenceElement(
     languageElement.className =
         "sentence-language";
 
-    const languageInfo =
-        languages[language];
-
     languageElement.textContent =
-        languageInfo
-            ? `${languageInfo.flag} ${languageInfo.code}`
-            : language.toUpperCase();
+        `${languages[language].flag} ${languages[language].code}`;
 
 
     const textElement =
@@ -275,6 +254,7 @@ function createSentenceElement(
 
     article.appendChild(textElement);
 
+
     return article;
 
 }
@@ -288,8 +268,14 @@ function renderPreview() {
 
     preview.innerHTML = "";
 
+
     state.sentences.forEach(
         (sentence, index) => {
+
+
+            /*
+             * Phrase source
+             */
 
             const sourceElement =
                 createSentenceElement(
@@ -300,14 +286,13 @@ function renderPreview() {
                 );
 
 
-            const translation =
-                state.translations[index]
-                || "Traduction à générer...";
-
+            /*
+             * Traduction provisoire
+             */
 
             const translationElement =
                 createSentenceElement(
-                    translation,
+                    "Traduction à générer...",
                     index,
                     state.targetLanguage,
                     "translation"
@@ -317,6 +302,7 @@ function renderPreview() {
             preview.appendChild(
                 sourceElement
             );
+
 
             preview.appendChild(
                 translationElement
@@ -329,115 +315,10 @@ function renderPreview() {
 
 
 /* =========================================================
-   API TRANSLATION
+   GÉNÉRATION APERÇU
    ========================================================= */
 
-async function translateSentences() {
-
-    if (
-        state.sentences.length === 0
-    ) {
-
-        return [];
-
-    }
-
-
-    const response =
-        await fetch(
-            "/api/translate",
-            {
-
-                method: "POST",
-
-                headers: {
-                    "Content-Type":
-                        "application/json"
-                },
-
-                body: JSON.stringify({
-
-                    source:
-                        state.sourceLanguage,
-
-                    target:
-                        state.targetLanguage,
-
-                    texts:
-                        state.sentences
-
-                })
-
-            }
-        );
-
-
-    if (!response.ok) {
-
-        let message =
-            `Erreur HTTP ${response.status}`;
-
-        try {
-
-            const error =
-                await response.json();
-
-            if (error.error) {
-                message = error.error;
-            }
-
-        } catch (_) {
-            /* réponse non JSON */
-        }
-
-        throw new Error(message);
-
-    }
-
-
-    const data =
-        await response.json();
-
-
-    if (
-        !data.translations ||
-        !Array.isArray(data.translations)
-    ) {
-
-        throw new Error(
-            "Réponse de traduction invalide"
-        );
-
-    }
-
-
-    if (
-        data.translations.length !==
-        state.sentences.length
-    ) {
-
-        throw new Error(
-            "Nombre de traductions inattendu"
-        );
-
-    }
-
-
-    return data.translations;
-
-}
-
-
-/* =========================================================
-   GÉNÉRATION
-   ========================================================= */
-
-async function generate() {
-
-    if (state.generating) {
-        return;
-    }
-
+function generatePreview() {
 
     const text =
         sourceText.value.trim();
@@ -447,82 +328,26 @@ async function generate() {
 
         state.sentences = [];
 
-        state.translations = [];
-
         updateSentenceCounter();
 
         renderEmptyPreview();
-
-        audioStatus.textContent =
-            "Audio non généré";
 
         return;
 
     }
 
 
-    state.generating = true;
+    state.sentences =
+        splitSentences(text);
 
-    generateButton.disabled = true;
 
-    setAppStatus("TRANSLATING");
+    updateSentenceCounter();
+
+    renderPreview();
+
 
     audioStatus.textContent =
-        "Traduction en cours...";
-
-
-    try {
-
-        state.sentences =
-            splitSentences(text);
-
-
-        state.translations = [];
-
-        updateSentenceCounter();
-
-        renderPreview();
-
-
-        /*
-         * Appel LibreTranslate
-         */
-
-        state.translations =
-            await translateSentences();
-
-
-        renderPreview();
-
-
-        audioStatus.textContent =
-            `${state.sentences.length} phrase(s) traduite(s)`;
-
-
-        setAppStatus("READY");
-
-
-    } catch (error) {
-
-        console.error(
-            "[SPE4Knerd] Erreur:",
-            error
-        );
-
-
-        setAppStatus("ERROR");
-
-
-        audioStatus.textContent =
-            `Erreur : ${error.message}`;
-
-    } finally {
-
-        state.generating = false;
-
-        generateButton.disabled = false;
-
-    }
+        `${state.sentences.length} phrase(s) détectée(s)`;
 
 }
 
@@ -554,26 +379,20 @@ function updateLanguages() {
     sequenceSource.textContent =
         `${source.flag} ${source.code}`;
 
+
     sequenceTarget.textContent =
         `${target.flag} ${target.code}`;
 
+
     sequenceSource2.textContent =
         `${source.flag} ${source.code}`;
+
 
     sequenceTarget2.textContent =
         `${target.flag} ${target.code}`;
 
 
-    /*
-     * Si du texte existe déjà,
-     * on remet l'aperçu dans l'état source.
-     */
-
-    if (
-        state.sentences.length > 0
-    ) {
-
-        state.translations = [];
+    if (state.sentences.length > 0) {
 
         renderPreview();
 
@@ -588,17 +407,10 @@ function updateLanguages() {
 
 function clearText() {
 
-    state.audioUrls.forEach(
-        url => URL.revokeObjectURL(url)
-    );
-
-    state.audioUrls = [];
-
     sourceText.value = "";
 
     state.sentences = [];
 
-    state.translations = [];
 
     updateCharacterCounter();
 
@@ -607,18 +419,13 @@ function clearText() {
     renderEmptyPreview();
 
 
-    audioPlayer.removeAttribute(
-        "src"
-    );
+    audioPlayer.removeAttribute("src");
 
     audioPlayer.load();
 
 
     audioStatus.textContent =
         "Audio non généré";
-
-
-    setAppStatus("READY");
 
 }
 
@@ -635,7 +442,7 @@ sourceText.addEventListener(
 
 generateButton.addEventListener(
     "click",
-    generate
+    generatePreview
 );
 
 
@@ -668,5 +475,3 @@ updateSentenceCounter();
 updateLanguages();
 
 renderEmptyPreview();
-
-setAppStatus("READY");
