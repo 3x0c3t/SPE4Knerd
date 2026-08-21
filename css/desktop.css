@@ -1,0 +1,273 @@
+/* =========================================================
+   DESKTOP
+   600px - 1599px
+   ========================================================= */
+
+@media (min-width: 600px) and (max-width: 1599px) {
+
+    /* =====================================================
+       APP
+       ===================================================== */
+
+    .app {
+        grid-template-rows:
+            58px
+            minmax(0, 1fr)
+            26px;
+    }
+
+
+    /* =====================================================
+       HEADER
+       ===================================================== */
+
+    .app-header {
+        padding: 0 18px;
+    }
+
+    .brand-title {
+        font-size: 17px;
+    }
+
+    .brand-subtitle {
+        font-size: 8px;
+    }
+
+    .header-status {
+        gap: 6px;
+
+        font-size: 9px;
+    }
+
+    .status-indicator {
+        width: 7px;
+        height: 7px;
+    }
+
+
+    /* =====================================================
+       MAIN
+       ===================================================== */
+
+    .main-content {
+        max-width: 1500px;
+
+        margin: 0 auto;
+
+        padding: 8px;
+
+        grid-template-columns:
+            minmax(0, 1fr)
+            minmax(0, 1fr);
+
+        grid-template-rows:
+            auto
+            minmax(0, 1fr)
+            auto;
+
+        gap: 8px;
+    }
+
+
+    /* =====================================================
+       PANELS
+       ===================================================== */
+
+    .configuration-panel {
+        grid-column:
+            1 / -1;
+    }
+
+    .source-panel {
+        grid-column:
+            1;
+    }
+
+    .preview-panel {
+        grid-column:
+            2;
+    }
+
+    .audio-panel {
+        grid-column:
+            1 / -1;
+    }
+
+    .panel-header {
+        height: 38px;
+        min-height: 38px;
+
+        padding: 0 12px;
+    }
+
+    .panel-header h1,
+    .panel-header h2 {
+        font-size: 9px;
+    }
+
+
+    /* =====================================================
+       CONFIGURATION
+       ===================================================== */
+
+    .language-config {
+        grid-template-columns:
+            minmax(0, 1fr)
+            60px
+            minmax(0, 1fr);
+
+        grid-template-areas:
+            "source direction target";
+
+        align-items: end;
+
+        column-gap: 16px;
+
+        padding: 10px 16px;
+    }
+
+    .source-language {
+        grid-area:
+            source;
+    }
+
+    .language-direction {
+        grid-area:
+            direction;
+
+        height: 38px;
+
+        font-size: 20px;
+    }
+
+    .target-language {
+        grid-area:
+            target;
+    }
+
+    .language-box {
+        gap: 5px;
+    }
+
+    .language-box label {
+        font-size: 9px;
+    }
+
+    .language-box select {
+        height: 38px;
+
+        padding: 0 10px;
+
+        font-size: 13px;
+    }
+
+
+    /* =====================================================
+       TEXTE
+       ===================================================== */
+
+    .source-textarea {
+        padding: 12px;
+
+        font-size: 14px;
+
+        line-height: 1.45;
+    }
+
+
+    /* =====================================================
+       ACTIONS
+       ===================================================== */
+
+    .panel-actions {
+        height: 42px;
+        min-height: 42px;
+
+        gap: 6px;
+
+        padding: 5px 7px;
+    }
+
+    .button {
+        height: 31px;
+
+        font-size: 9px;
+    }
+
+
+    /* =====================================================
+       APERCU
+       ===================================================== */
+
+    .sentence-item {
+        grid-template-columns:
+            28px
+            45px
+            minmax(0, 1fr);
+
+        gap: 8px;
+
+        padding: 10px;
+    }
+
+    .sentence-number,
+    .sentence-language {
+        font-size: 9px;
+    }
+
+    .sentence-text {
+        font-size: 12px;
+
+        line-height: 1.4;
+    }
+
+
+    /* =====================================================
+       AUDIO
+       ===================================================== */
+
+    .audio-sequence {
+        height: 42px;
+        min-height: 42px;
+
+        gap: 6px;
+
+        padding: 5px;
+    }
+
+    .sequence-language {
+        height: 30px;
+
+        min-width: 55px;
+
+        padding: 0 8px;
+
+        font-size: 9px;
+    }
+
+    .sequence-number {
+        font-size: 7px;
+    }
+
+    .sequence-arrow {
+        font-size: 11px;
+    }
+
+    .audio-status {
+        height: 24px;
+        min-height: 24px;
+
+        font-size: 8px;
+    }
+
+
+    /* =====================================================
+       FOOTER
+       ===================================================== */
+
+    .app-footer {
+        padding: 0 18px;
+
+        font-size: 8px;
+    }
+}

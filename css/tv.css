@@ -1,0 +1,326 @@
+/* =========================================================
+   TV / LARGE SCREEN
+   1600px+
+   ========================================================= */
+
+@media (min-width: 1600px) {
+
+    /* =====================================================
+       APP
+       ===================================================== */
+
+    .app {
+        grid-template-rows:
+            68px
+            minmax(0, 1fr)
+            30px;
+    }
+
+
+    /* =====================================================
+       HEADER
+       ===================================================== */
+
+    .app-header {
+        padding: 0 30px;
+    }
+
+    .brand-title {
+        font-size: 21px;
+    }
+
+    .brand-subtitle {
+        margin-top: 5px;
+
+        font-size: 9px;
+    }
+
+    .header-status {
+        gap: 8px;
+
+        font-size: 10px;
+    }
+
+    .status-indicator {
+        width: 8px;
+        height: 8px;
+    }
+
+
+    /* =====================================================
+       MAIN
+       ===================================================== */
+
+    .main-content {
+        max-width: 2000px;
+
+        margin: 0 auto;
+
+        padding: 10px;
+
+        grid-template-columns:
+            minmax(0, 1fr)
+            minmax(0, 1fr);
+
+        grid-template-rows:
+            auto
+            minmax(0, 1fr)
+            auto;
+
+        gap: 10px;
+    }
+
+
+    /* =====================================================
+       PANELS
+       ===================================================== */
+
+    .configuration-panel {
+        grid-column:
+            1 / -1;
+    }
+
+    .source-panel {
+        grid-column:
+            1;
+    }
+
+    .preview-panel {
+        grid-column:
+            2;
+    }
+
+    .audio-panel {
+        grid-column:
+            1 / -1;
+    }
+
+    .panel-header {
+        height: 46px;
+        min-height: 46px;
+
+        padding: 0 16px;
+    }
+
+    .panel-header h1,
+    .panel-header h2 {
+        font-size: 11px;
+    }
+
+    .panel-index,
+    .panel-info {
+        font-size: 9px;
+    }
+
+
+    /* =====================================================
+       CONFIGURATION
+       ===================================================== */
+
+    .language-config {
+        grid-template-columns:
+            minmax(0, 1fr)
+            100px
+            minmax(0, 1fr);
+
+        grid-template-areas:
+            "source direction target";
+
+        align-items: end;
+
+        column-gap: 30px;
+
+        padding: 14px 30px;
+    }
+
+    .source-language {
+        grid-area:
+            source;
+    }
+
+    .language-direction {
+        grid-area:
+            direction;
+
+        height: 46px;
+
+        font-size: 26px;
+    }
+
+    .target-language {
+        grid-area:
+            target;
+    }
+
+    .language-box {
+        gap: 7px;
+    }
+
+    .language-box label {
+        font-size: 11px;
+    }
+
+    .language-box select {
+        height: 46px;
+
+        padding: 0 14px;
+
+        font-size: 16px;
+    }
+
+
+    /* =====================================================
+       TEXTE
+       ===================================================== */
+
+    .source-textarea {
+        padding: 16px;
+
+        font-size: 18px;
+
+        line-height: 1.5;
+    }
+
+
+    /* =====================================================
+       APERCU
+       ===================================================== */
+
+    .sentence-item {
+        grid-template-columns:
+            36px
+            60px
+            minmax(0, 1fr);
+
+        gap: 12px;
+
+        padding: 14px;
+    }
+
+    .sentence-number,
+    .sentence-language {
+        font-size: 11px;
+    }
+
+    .sentence-text {
+        font-size: 16px;
+
+        line-height: 1.45;
+    }
+
+
+    /* =====================================================
+       AUDIO
+       ===================================================== */
+
+    .audio-sequence {
+        height: 54px;
+        min-height: 54px;
+
+        gap: 10px;
+    }
+
+    .sequence-language {
+        height: 38px;
+
+        min-width: 75px;
+
+        padding: 0 12px;
+
+        font-size: 11px;
+    }
+
+    .sequence-number {
+        font-size: 9px;
+    }
+
+    .sequence-arrow {
+        font-size: 16px;
+    }
+
+    .audio-status {
+        height: 30px;
+        min-height: 30px;
+
+        font-size: 9px;
+    }
+
+
+    /* =====================================================
+       FOOTER
+       ===================================================== */
+
+    .app-footer {
+        padding: 0 30px;
+
+        font-size: 9px;
+    }
+}
+
+
+/* =========================================================
+   4K
+   ========================================================= */
+
+@media (min-width: 2500px) {
+
+    .app {
+        grid-template-rows:
+            80px
+            minmax(0, 1fr)
+            36px;
+    }
+
+    .main-content {
+        max-width: 2300px;
+
+        padding: 12px;
+
+        gap: 12px;
+    }
+
+    .panel-header {
+        height: 54px;
+        min-height: 54px;
+    }
+
+    .panel-header h1,
+    .panel-header h2 {
+        font-size: 13px;
+    }
+
+    .language-config {
+        grid-template-columns:
+            minmax(0, 1fr)
+            120px
+            minmax(0, 1fr);
+
+        column-gap: 40px;
+
+        padding: 18px 40px;
+    }
+
+    .language-box label {
+        font-size: 13px;
+    }
+
+    .language-box select {
+        height: 52px;
+
+        font-size: 18px;
+    }
+
+    .language-direction {
+        height: 52px;
+
+        font-size: 30px;
+    }
+
+    .source-textarea {
+        font-size: 20px;
+    }
+
+    .sentence-text {
+        font-size: 18px;
+    }
+}
