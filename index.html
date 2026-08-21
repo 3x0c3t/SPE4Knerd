@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>SPE4Knerd</title>
+    <meta
+        name="description"
+        content="Traduction et génération audio alternée."
+    >
+
+    <link rel="stylesheet" href="index.css">
+</head>
+
+<body>
+
+<div class="app">
+
+    <header class="app-header">
+
+        <div class="brand">
+            <span class="brand-main">SPE4Knerd</span>
+            <span class="brand-sub">TRANSLATION AUDIO</span>
+        </div>
+
+        <div class="header-status">
+            <span class="status-dot"></span>
+            <span>READY</span>
+        </div>
+
+    </header>
+
+
+    <main class="main-content">
+
+        <section class="panel configuration-panel">
+
+            <div class="panel-header">
+                <h1>Configuration</h1>
+                <span class="panel-number">01</span>
+            </div>
+
+            <div class="language-grid">
+
+                <div class="language-control">
+
+                    <label for="sourceLanguage">
+                        Langue source
+                    </label>
+
+                    <select id="sourceLanguage">
+                        <option value="fr" selected>
+                            🇫🇷 Français
+                        </option>
+
+                        <option value="es">
+                            🇲🇽 Español
+                        </option>
+                    </select>
+
+                </div>
+
+
+                <div class="language-arrow">
+                    →
+                </div>
+
+
+                <div class="language-control">
+
+                    <label for="targetLanguage">
+                        Langue cible
+                    </label>
+
+                    <select id="targetLanguage">
+
+                        <option value="es" selected>
+                            🇲🇽 Español
+                        </option>
+
+                        <option value="fr">
+                            🇫🇷 Français
+                        </option>
+
+                    </select>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <section class="panel source-panel">
+
+            <div class="panel-header">
+
+                <h2>Texte source</h2>
+
+                <span
+                    class="character-counter"
+                    id="characterCounter"
+                >
+                    0 caractères
+                </span>
+
+            </div>
+
+
+            <textarea
+                id="sourceText"
+                class="source-textarea"
+                placeholder="Collez ici votre texte complet..."
+                spellcheck="true"
+            ></textarea>
+
+
+            <div class="source-actions">
+
+                <button
+                    type="button"
+                    id="clearButton"
+                    class="button button-secondary"
+                >
+                    Effacer
+                </button>
+
+                <button
+                    type="button"
+                    id="generateButton"
+                    class="button button-primary"
+                >
+                    Générer
+                </button>
+
+            </div>
+
+        </section>
+
+
+        <section class="panel preview-panel">
+
+            <div class="panel-header">
+
+                <h2>Aperçu</h2>
+
+                <span
+                    class="sentence-counter"
+                    id="sentenceCounter"
+                >
+                    0 phrases
+                </span>
+
+            </div>
+
+
+            <div id="preview" class="preview">
+
+                <div class="empty-state">
+
+                    <div class="empty-icon">
+                        ⇅
+                    </div>
+
+                    <p>
+                        L'aperçu des phrases apparaîtra ici.
+                    </p>
+
+                    <span>
+                        Une phrase source puis sa traduction.
+                    </span>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <section class="panel audio-panel">
+
+            <div class="panel-header">
+
+                <h2>Audio</h2>
+
+                <span
+                    class="audio-mode"
+                >
+                    FR → ES
+                </span>
+
+            </div>
+
+
+            <div class="audio-sequence">
+
+                <div class="sequence-item source">
+                    <span class="sequence-number">01</span>
+                    <span class="sequence-language">
+                        🇫🇷 FR
+                    </span>
+                </div>
+
+                <div class="sequence-arrow">→</div>
+
+                <div class="sequence-item target">
+                    <span class="sequence-number">02</span>
+                    <span class="sequence-language">
+                        🇲🇽 ES
+                    </span>
+                </div>
+
+                <div class="sequence-arrow">→</div>
+
+                <div class="sequence-item source">
+                    <span class="sequence-number">03</span>
+                    <span class="sequence-language">
+                        🇫🇷 FR
+                    </span>
+                </div>
+
+                <div class="sequence-arrow">→</div>
+
+                <div class="sequence-item target">
+                    <span class="sequence-number">04</span>
+                    <span class="sequence-language">
+                        🇲🇽 ES
+                    </span>
+                </div>
+
+            </div>
+
+
+            <div class="audio-player-container">
+
+                <audio
+                    id="audioPlayer"
+                    controls
+                    preload="none"
+                ></audio>
+
+                <div class="audio-placeholder">
+                    L'audio sera généré dans une prochaine version.
+                </div>
+
+            </div>
+
+        </section>
+
+    </main>
+
+
+    <footer class="app-footer">
+
+        <span>SPE4Knerd</span>
+        <span>V1.0</span>
+
+    </footer>
+
+</div>
+
+
+<script src="index.js"></script>
+
+</body>
+</html>
