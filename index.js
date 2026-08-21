@@ -3,7 +3,7 @@
 /* =========================================================
    SPE4Knerd
    V1.1
-   Interface + traduction + préparation audio
+   Interface + traduction + audio
    ========================================================= */
 
 
@@ -142,8 +142,11 @@ function updateCharacterCounter() {
 function splitSentences(text) {
 
     if (!text.trim()) {
+
         return [];
+
     }
+
 
     return text
 
@@ -151,11 +154,19 @@ function splitSentences(text) {
 
         .replace(/\n+/g, " ")
 
-        .split(/(?<=[.!?…。！？])\s+/)
+        .split(
+            /(?<=[.!?…。！？])\s+/
+        )
 
-        .map(sentence => sentence.trim())
+        .map(
+            sentence =>
+                sentence.trim()
+        )
 
-        .filter(sentence => sentence.length > 0);
+        .filter(
+            sentence =>
+                sentence.length > 0
+        );
 
 }
 
@@ -182,7 +193,10 @@ function updateSentenceCounter() {
 function setAppStatus(text) {
 
     if (appStatus) {
-        appStatus.textContent = text;
+
+        appStatus.textContent =
+            text;
+
     }
 
 }
@@ -234,6 +248,7 @@ function createSentenceElement(
     article.className =
         `sentence-item sentence-${type}`;
 
+
     const number =
         document.createElement("span");
 
@@ -250,8 +265,10 @@ function createSentenceElement(
     languageElement.className =
         "sentence-language";
 
+
     const languageInfo =
         languages[language];
+
 
     languageElement.textContent =
         languageInfo
@@ -269,11 +286,18 @@ function createSentenceElement(
         text;
 
 
-    article.appendChild(number);
+    article.appendChild(
+        number
+    );
 
-    article.appendChild(languageElement);
+    article.appendChild(
+        languageElement
+    );
 
-    article.appendChild(textElement);
+    article.appendChild(
+        textElement
+    );
+
 
     return article;
 
@@ -287,6 +311,7 @@ function createSentenceElement(
 function renderPreview() {
 
     preview.innerHTML = "";
+
 
     state.sentences.forEach(
         (sentence, index) => {
@@ -302,7 +327,8 @@ function renderPreview() {
 
             const translation =
                 state.translations[index]
-                || "Traduction à générer...";
+                ||
+                "Traduction à générer...";
 
 
             const translationElement =
@@ -348,25 +374,29 @@ async function translateSentences() {
             "/api/translate",
             {
 
-                method: "POST",
+                method:
+                    "POST",
 
                 headers: {
+
                     "Content-Type":
                         "application/json"
+
                 },
 
-                body: JSON.stringify({
+                body:
+                    JSON.stringify({
 
-                    source:
-                        state.sourceLanguage,
+                        source:
+                            state.sourceLanguage,
 
-                    target:
-                        state.targetLanguage,
+                        target:
+                            state.targetLanguage,
 
-                    texts:
-                        state.sentences
+                        texts:
+                            state.sentences
 
-                })
+                    })
 
             }
         );
@@ -377,20 +407,30 @@ async function translateSentences() {
         let message =
             `Erreur HTTP ${response.status}`;
 
+
         try {
 
             const error =
                 await response.json();
 
+
             if (error.error) {
-                message = error.error;
+
+                message =
+                    error.error;
+
             }
 
         } catch (_) {
-            /* réponse non JSON */
+
+            /* Réponse non JSON */
+
         }
 
-        throw new Error(message);
+
+        throw new Error(
+            message
+        );
 
     }
 
@@ -401,7 +441,9 @@ async function translateSentences() {
 
     if (
         !data.translations ||
-        !Array.isArray(data.translations)
+        !Array.isArray(
+            data.translations
+        )
     ) {
 
         throw new Error(
@@ -416,6 +458,12 @@ async function translateSentences() {
         state.sentences.length
     ) {
 
+        console.error(
+            "[TRANSLATE] Réponse reçue:",
+            data
+        );
+
+
         throw new Error(
             "Nombre de traductions inattendu"
         );
@@ -429,13 +477,356 @@ async function translateSentences() {
 
 
 /* =========================================================
+   API AUDIO
+   ========================================================= */
+
+async function generateAudio(
+    text,
+    language
+) {
+
+    const response =
+        await fetch(
+            "/api/audio",
+            {
+
+                method:
+                    "POST",
+
+                headers: {
+
+                    "Content-Type":
+                        "application/json"
+
+                },
+
+                body:
+                    JSON.stringify({
+
+                        language:
+                            language,
+
+                        text:
+                            text
+
+                    })
+
+            }
+        );
+
+
+    if (!response.ok) {
+
+        let message =
+            `Erreur audio HTTP ${response.status}`;
+
+
+        try {
+
+            const error =
+                await response.json();
+
+
+            if (error.error) {
+
+                message =
+                    error.error;
+
+            }
+
+        } catch (_) {
+
+            /* Réponse non JSON */
+
+        }
+
+
+        throw new Error(
+            message
+        );
+
+    }
+
+
+    const blob =
+        await response.blob();
+
+
+    if (
+        !blob ||
+        blob.size === 0
+    ) {
+
+        throw new Error(
+            "Fichier audio vide"
+        );
+
+    }
+
+
+    return URL.createObjectURL(
+        blob
+    );
+
+}
+
+
+/* =========================================================
+   LIBÉRATION DES AUDIO
+   ========================================================= */
+
+function revokeAudioUrls() {
+
+    state.audioUrls.forEach(
+        url => {
+
+            try {
+
+                URL.revokeObjectURL(
+                    url
+                );
+
+            } catch (_) {
+
+                /* Rien */
+
+            }
+
+        }
+    );
+
+
+    state.audioUrls = [];
+
+}
+
+
+/* =========================================================
+   GÉNÉRATION AUDIO COMPLÈTE
+   ========================================================= */
+
+async function generateAllAudio() {
+
+    revokeAudioUrls();
+
+
+    if (
+        state.sentences.length === 0
+    ) {
+
+        audioStatus.textContent =
+            "Audio non généré";
+
+        return;
+
+    }
+
+
+    const sequence = [];
+
+
+    for (
+        let index = 0;
+        index < state.sentences.length;
+        index++
+    ) {
+
+        sequence.push({
+
+            number:
+                index + 1,
+
+            language:
+                state.sourceLanguage,
+
+            text:
+                state.sentences[index],
+
+            type:
+                "source"
+
+        });
+
+
+        sequence.push({
+
+            number:
+                index + 1,
+
+            language:
+                state.targetLanguage,
+
+            text:
+                state.translations[index],
+
+            type:
+                "target"
+
+        });
+
+    }
+
+
+    const audioUrls = [];
+
+
+    for (
+        let index = 0;
+        index < sequence.length;
+        index++
+    ) {
+
+        const item =
+            sequence[index];
+
+
+        const languageInfo =
+            languages[item.language];
+
+
+        audioStatus.textContent =
+            `Audio ${index + 1}/${sequence.length} : ` +
+            `${languageInfo ? languageInfo.code : item.language.toUpperCase()}`;
+
+
+        const url =
+            await generateAudio(
+                item.text,
+                item.language
+            );
+
+
+        audioUrls.push(
+            url
+        );
+
+    }
+
+
+    state.audioUrls =
+        audioUrls;
+
+
+    /*
+     * Le lecteur HTML ne peut lire qu'un fichier
+     * à la fois.
+     *
+     * On place donc le premier audio dans le lecteur.
+     * La séquence complète reste disponible dans
+     * state.audioUrls pour l'étape suivante.
+     */
+
+    if (
+        state.audioUrls.length > 0
+    ) {
+
+        audioPlayer.src =
+            state.audioUrls[0];
+
+        audioPlayer.load();
+
+    }
+
+
+    audioStatus.textContent =
+        `${sequence.length} audio généré(s)`;
+
+}
+
+
+/* =========================================================
+   LECTURE DE LA SÉQUENCE AUDIO
+   ========================================================= */
+
+let audioSequenceIndex =
+    0;
+
+
+function playAudioSequence() {
+
+    if (
+        state.audioUrls.length === 0
+    ) {
+
+        return;
+
+    }
+
+
+    audioSequenceIndex =
+        0;
+
+
+    playNextAudio();
+
+}
+
+
+function playNextAudio() {
+
+    if (
+        audioSequenceIndex >=
+        state.audioUrls.length
+    ) {
+
+        audioStatus.textContent =
+            `${state.audioUrls.length} audio terminé(s)`;
+
+        return;
+
+    }
+
+
+    const url =
+        state.audioUrls[
+            audioSequenceIndex
+        ];
+
+
+    audioPlayer.src =
+        url;
+
+
+    audioPlayer.load();
+
+
+    audioPlayer.onended =
+        () => {
+
+            audioSequenceIndex++;
+
+            playNextAudio();
+
+        };
+
+
+    audioPlayer.play()
+        .catch(
+            error => {
+
+                console.error(
+                    "[AUDIO] Lecture:",
+                    error
+                );
+
+            }
+        );
+
+}
+
+
+/* =========================================================
    GÉNÉRATION
    ========================================================= */
 
 async function generate() {
 
-    if (state.generating) {
+    if (
+        state.generating
+    ) {
+
         return;
+
     }
 
 
@@ -449,6 +840,8 @@ async function generate() {
 
         state.translations = [];
 
+        revokeAudioUrls();
+
         updateSentenceCounter();
 
         renderEmptyPreview();
@@ -456,37 +849,76 @@ async function generate() {
         audioStatus.textContent =
             "Audio non généré";
 
+        setAppStatus(
+            "READY"
+        );
+
         return;
 
     }
 
 
-    state.generating = true;
+    state.generating =
+        true;
 
-    generateButton.disabled = true;
 
-    setAppStatus("TRANSLATING");
+    generateButton.disabled =
+        true;
+
+
+    setAppStatus(
+        "TRANSLATING"
+    );
+
 
     audioStatus.textContent =
-        "Traduction en cours...";
+        "Découpage des phrases...";
 
 
     try {
 
+        /* ---------------------------------------------
+           PHRASES
+           --------------------------------------------- */
+
         state.sentences =
-            splitSentences(text);
+            splitSentences(
+                text
+            );
 
 
-        state.translations = [];
+        state.translations =
+            [];
+
 
         updateSentenceCounter();
 
         renderPreview();
 
 
-        /*
-         * Appel LibreTranslate
-         */
+        if (
+            state.sentences.length === 0
+        ) {
+
+            throw new Error(
+                "Aucune phrase détectée"
+            );
+
+        }
+
+
+        /* ---------------------------------------------
+           TRADUCTION
+           --------------------------------------------- */
+
+        setAppStatus(
+            "TRANSLATING"
+        );
+
+
+        audioStatus.textContent =
+            "Traduction en cours...";
+
 
         state.translations =
             await translateSentences();
@@ -495,11 +927,25 @@ async function generate() {
         renderPreview();
 
 
-        audioStatus.textContent =
-            `${state.sentences.length} phrase(s) traduite(s)`;
+        /* ---------------------------------------------
+           AUDIO
+           --------------------------------------------- */
+
+        setAppStatus(
+            "AUDIO"
+        );
 
 
-        setAppStatus("READY");
+        await generateAllAudio();
+
+
+        /* ---------------------------------------------
+           TERMINÉ
+           --------------------------------------------- */
+
+        setAppStatus(
+            "READY"
+        );
 
 
     } catch (error) {
@@ -510,17 +956,23 @@ async function generate() {
         );
 
 
-        setAppStatus("ERROR");
+        setAppStatus(
+            "ERROR"
+        );
 
 
         audioStatus.textContent =
             `Erreur : ${error.message}`;
 
+
     } finally {
 
-        state.generating = false;
+        state.generating =
+            false;
 
-        generateButton.disabled = false;
+
+        generateButton.disabled =
+            false;
 
     }
 
@@ -536,15 +988,28 @@ function updateLanguages() {
     state.sourceLanguage =
         sourceLanguage.value;
 
+
     state.targetLanguage =
         targetLanguage.value;
 
 
     const source =
-        languages[state.sourceLanguage];
+        languages[
+            state.sourceLanguage
+        ];
+
 
     const target =
-        languages[state.targetLanguage];
+        languages[
+            state.targetLanguage
+        ];
+
+
+    if (!source || !target) {
+
+        return;
+
+    }
 
 
     audioMode.textContent =
@@ -554,30 +1019,51 @@ function updateLanguages() {
     sequenceSource.textContent =
         `${source.flag} ${source.code}`;
 
+
     sequenceTarget.textContent =
         `${target.flag} ${target.code}`;
 
+
     sequenceSource2.textContent =
         `${source.flag} ${source.code}`;
+
 
     sequenceTarget2.textContent =
         `${target.flag} ${target.code}`;
 
 
     /*
-     * Si du texte existe déjà,
-     * on remet l'aperçu dans l'état source.
+     * Changement de langue :
+     * les anciennes traductions/audio
+     * ne sont plus valables.
      */
+
+    revokeAudioUrls();
+
+
+    state.translations =
+        [];
+
+
+    audioPlayer.removeAttribute(
+        "src"
+    );
+
+
+    audioPlayer.load();
+
 
     if (
         state.sentences.length > 0
     ) {
 
-        state.translations = [];
-
         renderPreview();
 
     }
+
+
+    audioStatus.textContent =
+        "Audio non généré";
 
 }
 
@@ -588,17 +1074,20 @@ function updateLanguages() {
 
 function clearText() {
 
-    state.audioUrls.forEach(
-        url => URL.revokeObjectURL(url)
-    );
+    revokeAudioUrls();
 
-    state.audioUrls = [];
 
-    sourceText.value = "";
+    state.sentences =
+        [];
 
-    state.sentences = [];
 
-    state.translations = [];
+    state.translations =
+        [];
+
+
+    sourceText.value =
+        "";
+
 
     updateCharacterCounter();
 
@@ -611,6 +1100,7 @@ function clearText() {
         "src"
     );
 
+
     audioPlayer.load();
 
 
@@ -618,7 +1108,9 @@ function clearText() {
         "Audio non généré";
 
 
-    setAppStatus("READY");
+    setAppStatus(
+        "READY"
+    );
 
 }
 
@@ -669,4 +1161,6 @@ updateLanguages();
 
 renderEmptyPreview();
 
-setAppStatus("READY");
+setAppStatus(
+    "READY"
+);
