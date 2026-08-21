@@ -4,14 +4,60 @@ require("dotenv").config();
 
 const express = require("express");
 const cors = require("cors");
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
+const crypto = require("crypto");
+const { spawn } = require("child_process");
 
 const app = express();
 
-const PORT = Number(process.env.PORT) || 3001;
-const LIBRETRANSLATE_URL =
-    process.env.LIBRETRANSLATE_URL || "http://127.0.0.1:5000";
 
-const VERSION = "1.2.0";
+/* =========================================================
+   CONFIGURATION
+   ========================================================= */
+
+const PORT = Number(process.env.PORT || 3003);
+
+const LIBRETRANSLATE_URL =
+    process.env.LIBRETRANSLATE_URL ||
+    "http://127.0.0.1:5000";
+
+const PIPER_BIN =
+    process.env.PIPER_BIN ||
+    "/opt/piper/venv/bin/piper";
+
+const PIPER_VOICES_DIR =
+    process.env.PIPER_VOICES_DIR ||
+    "/opt/piper/voices";
+
+const VERSION = "1.3.0";
+
+
+/* =========================================================
+   VOIX
+   ========================================================= */
+
+const VOICES = {
+
+    fr: {
+        name: "fr_FR-siwis-medium",
+        model: path.join(
+            PIPER_VOICES_DIR,
+            "fr_FR-siwis-medium.onnx"
+        )
+    },
+
+    es: {
+        name: "es_MX-ald-medium",
+        model: path.join(
+            PIPER_VOICES_DIR,
+            "es_MX-ald-medium.onnx"
+        )
+    }
+
+};
+
 
 /* =========================================================
    MIDDLEWARE
@@ -24,6 +70,7 @@ app.use(
         limit: "1mb"
     })
 );
+
 
 /* =========================================================
    LOG
@@ -39,126 +86,61 @@ app.use((req, res, next) => {
 
 });
 
+
 /* =========================================================
    HEALTH
    ========================================================= */
 
-app.get("/api/health", async (req, res) => {
+app.get("/api/health", (req, res) => {
 
-    let translation = false;
+    const voices = {};
 
-    try {
+    for (const [language, voice] of Object.entries(VOICES)) {
 
-        const response = await fetch(
-            `${LIBRETRANSLATE_URL}/languages`
-        );
-
-        translation = response.ok;
-
-    } catch (error) {
-
-        translation = false;
+        voices[language] = {
+            name: voice.name,
+            available: fs.existsSync(voice.model)
+        };
 
     }
 
     res.json({
+
         status: "ok",
-        service: "SPE4Knerd API",
-        version: VERSION,
-        translation,
-        translationEngine: "LibreTranslate",
-        translationUrl: LIBRETRANSLATE_URL
+
+        service:
+            "SPE4Knerd API",
+
+        version:
+            VERSION,
+
+        translation:
+            true,
+
+        translationEngine:
+            "LibreTranslate",
+
+        translationUrl:
+            LIBRETRANSLATE_URL,
+
+        audio:
+            true,
+
+        audioEngine:
+            "Piper",
+
+        piper:
+            fs.existsSync(PIPER_BIN),
+
+        voices
+
     });
 
 });
 
-/* =========================================================
-   LIBRETRANSLATE
-   ========================================================= */
-
-async function translateTexts(
-    source,
-    target,
-    texts
-) {
-
-    if (source === target) {
-
-        return texts;
-
-    }
-
-    const translations = [];
-
-    for (const text of texts) {
-
-        const response = await fetch(
-            `${LIBRETRANSLATE_URL}/translate`,
-            {
-                method: "POST",
-
-                headers: {
-                    "Content-Type": "application/json"
-                },
-
-                body: JSON.stringify({
-
-                    q: text,
-
-                    source: source,
-
-                    target: target,
-
-                    format: "text"
-
-                })
-            }
-        );
-
-        const data = await response.json();
-
-        if (!response.ok) {
-
-            console.error(
-                "[TRANSLATE] LibreTranslate error:",
-                data
-            );
-
-            throw new Error(
-                data?.error ||
-                "Erreur LibreTranslate"
-            );
-
-        }
-
-        if (
-            typeof data.translatedText !==
-            "string"
-        ) {
-
-            console.error(
-                "[TRANSLATE] Réponse invalide:",
-                data
-            );
-
-            throw new Error(
-                "Réponse LibreTranslate invalide"
-            );
-
-        }
-
-        translations.push(
-            data.translatedText
-        );
-
-    }
-
-    return translations;
-
-}
 
 /* =========================================================
-   TRANSLATE
+   TRANSLATION
    ========================================================= */
 
 app.post("/api/translate", async (req, res) => {
@@ -171,6 +153,7 @@ app.post("/api/translate", async (req, res) => {
             texts
         } = req.body;
 
+
         /* ---------------------------------------------
            VALIDATION
            --------------------------------------------- */
@@ -178,81 +161,173 @@ app.post("/api/translate", async (req, res) => {
         if (!source) {
 
             return res.status(400).json({
-                error: "Langue source manquante"
+
+                error:
+                    "Langue source manquante"
+
             });
 
         }
+
 
         if (!target) {
 
             return res.status(400).json({
-                error: "Langue cible manquante"
+
+                error:
+                    "Langue cible manquante"
+
             });
 
         }
+
 
         if (!Array.isArray(texts)) {
 
             return res.status(400).json({
-                error: "texts doit être un tableau"
+
+                error:
+                    "texts doit être un tableau"
+
             });
 
         }
+
 
         if (texts.length === 0) {
 
             return res.json({
+
                 source,
                 target,
                 translations: []
+
             });
 
         }
+
 
         if (texts.length > 100) {
 
             return res.status(400).json({
+
                 error:
                     "Maximum 100 phrases par requête"
+
             });
 
         }
 
-        /* ---------------------------------------------
-           NETTOYAGE
-           --------------------------------------------- */
-
-        const cleanTexts = texts.map(
-            text => String(text).trim()
-        );
-
-        if (
-            cleanTexts.some(
-                text => text.length === 0
-            )
-        ) {
-
-            return res.status(400).json({
-                error:
-                    "Une ou plusieurs phrases sont vides"
-            });
-
-        }
 
         /* ---------------------------------------------
-           TRANSLATION
+           SOURCE = TARGET
            --------------------------------------------- */
 
-        const translations =
-            await translateTexts(
+        if (source === target) {
+
+            return res.json({
+
                 source,
                 target,
-                cleanTexts
+                translations: texts
+
+            });
+
+        }
+
+
+        /* ---------------------------------------------
+           LIBRETRANSLATE
+           --------------------------------------------- */
+
+        const response =
+            await fetch(
+                `${LIBRETRANSLATE_URL}/translate`,
+                {
+
+                    method: "POST",
+
+                    headers: {
+
+                        "Content-Type":
+                            "application/json"
+
+                    },
+
+                    body: JSON.stringify({
+
+                        q: texts,
+
+                        source,
+
+                        target,
+
+                        format: "text"
+
+                    })
+
+                }
             );
 
+
+        const data =
+            await response.json();
+
+
+        /* ---------------------------------------------
+           ERROR
+           --------------------------------------------- */
+
+        if (!response.ok) {
+
+            console.error(
+                "[TRANSLATE] LibreTranslate error:",
+                data
+            );
+
+            return res.status(
+                response.status
+            ).json({
+
+                error:
+                    "Erreur LibreTranslate",
+
+                details:
+                    data
+
+            });
+
+        }
+
+
+        /* ---------------------------------------------
+           NORMALISATION
+           --------------------------------------------- */
+
+        let translations;
+
+
+        if (Array.isArray(data)) {
+
+            translations =
+                data.map(
+                    item =>
+                        item.translatedText
+                );
+
+        } else {
+
+            translations = [
+                data.translatedText
+            ];
+
+        }
+
+
         console.log(
-            `[TRANSLATE] ${cleanTexts.length} phrase(s) ${source} → ${target}`
+            `[TRANSLATE] ${texts.length} phrase(s) ${source} → ${target}`
         );
+
 
         return res.json({
 
@@ -264,6 +339,7 @@ app.post("/api/translate", async (req, res) => {
 
         });
 
+
     } catch (error) {
 
         console.error(
@@ -271,13 +347,10 @@ app.post("/api/translate", async (req, res) => {
             error
         );
 
-        return res.status(502).json({
+        return res.status(500).json({
 
             error:
-                "Erreur du moteur de traduction",
-
-            details:
-                error.message
+                "Erreur interne du serveur"
 
         });
 
@@ -285,185 +358,6 @@ app.post("/api/translate", async (req, res) => {
 
 });
 
-/* =========================================================
-   SENTENCE SPLITTER
-   ========================================================= */
-
-function splitSentences(text) {
-
-    return text
-        .replace(/\r\n/g, "\n")
-        .replace(/\r/g, "\n")
-        .split(
-            /(?<=[.!?…])\s+|\n+/
-        )
-        .map(
-            sentence =>
-                sentence.trim()
-        )
-        .filter(
-            sentence =>
-                sentence.length > 0
-        );
-
-}
-
-/* =========================================================
-   PROCESS FULL TEXT
-   ========================================================= */
-
-app.post("/api/process", async (req, res) => {
-
-    try {
-
-        const {
-            source,
-            target,
-            text
-        } = req.body;
-
-        /* ---------------------------------------------
-           VALIDATION
-           --------------------------------------------- */
-
-        if (!source) {
-
-            return res.status(400).json({
-                error:
-                    "Langue source manquante"
-            });
-
-        }
-
-        if (!target) {
-
-            return res.status(400).json({
-                error:
-                    "Langue cible manquante"
-            });
-
-        }
-
-        if (
-            typeof text !== "string" ||
-            text.trim().length === 0
-        ) {
-
-            return res.status(400).json({
-                error:
-                    "Texte source manquant"
-            });
-
-        }
-
-        /* ---------------------------------------------
-           SPLIT
-           --------------------------------------------- */
-
-        const sentences =
-            splitSentences(text);
-
-        if (sentences.length === 0) {
-
-            return res.json({
-
-                source,
-
-                target,
-
-                sentenceCount: 0,
-
-                sentences: []
-
-            });
-
-        }
-
-        if (sentences.length > 100) {
-
-            return res.status(400).json({
-
-                error:
-                    "Maximum 100 phrases par texte"
-
-            });
-
-        }
-
-        /* ---------------------------------------------
-           TRANSLATION
-           --------------------------------------------- */
-
-        const translations =
-            await translateTexts(
-                source,
-                target,
-                sentences
-            );
-
-        /* ---------------------------------------------
-           BUILD RESULT
-           --------------------------------------------- */
-
-        const result =
-            sentences.map(
-                (sentence, index) => ({
-
-                    id: index + 1,
-
-                    source:
-                        sentence,
-
-                    translation:
-                        translations[index],
-
-                    sourceLang:
-                        source,
-
-                    targetLang:
-                        target
-
-                })
-            );
-
-        console.log(
-            `[PROCESS] ${sentences.length} phrase(s) ${source} → ${target}`
-        );
-
-        return res.json({
-
-            source,
-
-            target,
-
-            sentenceCount:
-                result.length,
-
-            sentences:
-                result
-
-        });
-
-    } catch (error) {
-
-        console.error(
-            "[PROCESS] Exception:",
-            error
-        );
-
-        return res.status(502).json({
-
-            error:
-                "Erreur lors du traitement du texte",
-
-            details:
-                error.message
-
-        });
-
-    }
-
-});
 
 /* =========================================================
    AUDIO
@@ -471,17 +365,359 @@ app.post("/api/process", async (req, res) => {
 
 app.post("/api/audio", async (req, res) => {
 
-    return res.status(501).json({
+    let outputFile = null;
 
-        error:
-            "Génération audio non disponible",
+    try {
 
-        message:
-            "Le moteur audio sera ajouté ultérieurement."
+        const {
+            text,
+            language
+        } = req.body;
 
-    });
+
+        /* ---------------------------------------------
+           VALIDATION
+           --------------------------------------------- */
+
+        if (
+            typeof text !== "string" ||
+            !text.trim()
+        ) {
+
+            return res.status(400).json({
+
+                error:
+                    "Texte manquant"
+
+            });
+
+        }
+
+
+        if (text.length > 1000) {
+
+            return res.status(400).json({
+
+                error:
+                    "Texte trop long (maximum 1000 caractères)"
+
+            });
+
+        }
+
+
+        if (!language) {
+
+            return res.status(400).json({
+
+                error:
+                    "Langue manquante"
+
+            });
+
+        }
+
+
+        const voice =
+            VOICES[language];
+
+
+        if (!voice) {
+
+            return res.status(400).json({
+
+                error:
+                    "Langue audio non supportée",
+
+                supportedLanguages:
+                    Object.keys(VOICES)
+
+            });
+
+        }
+
+
+        /* ---------------------------------------------
+           CHECK PIPER
+           --------------------------------------------- */
+
+        if (!fs.existsSync(PIPER_BIN)) {
+
+            console.error(
+                "[AUDIO] Piper introuvable:",
+                PIPER_BIN
+            );
+
+            return res.status(500).json({
+
+                error:
+                    "Moteur Piper introuvable"
+
+            });
+
+        }
+
+
+        /* ---------------------------------------------
+           CHECK MODEL
+           --------------------------------------------- */
+
+        if (!fs.existsSync(voice.model)) {
+
+            console.error(
+                "[AUDIO] Modèle introuvable:",
+                voice.model
+            );
+
+            return res.status(500).json({
+
+                error:
+                    "Modèle vocal introuvable",
+
+                language,
+
+                voice:
+                    voice.name
+
+            });
+
+        }
+
+
+        /* ---------------------------------------------
+           TEMP FILE
+           --------------------------------------------- */
+
+        const id =
+            crypto.randomBytes(16)
+                .toString("hex");
+
+        outputFile =
+            path.join(
+                os.tmpdir(),
+                `spe4knerd-${id}.wav`
+            );
+
+
+        /* ---------------------------------------------
+           PIPER
+           --------------------------------------------- */
+
+        console.log(
+            `[AUDIO] ${language} → ${voice.name}`
+        );
+
+
+        await new Promise(
+            (resolve, reject) => {
+
+                const piper =
+                    spawn(
+                        PIPER_BIN,
+                        [
+
+                            "--model",
+                            voice.model,
+
+                            "--output_file",
+                            outputFile
+
+                        ],
+                        {
+
+                            stdio: [
+                                "pipe",
+                                "ignore",
+                                "pipe"
+                            ]
+
+                        }
+                    );
+
+
+                let stderr = "";
+
+
+                piper.stderr.on(
+                    "data",
+                    chunk => {
+
+                        stderr +=
+                            chunk.toString();
+
+                    }
+                );
+
+
+                piper.on(
+                    "error",
+                    error => {
+
+                        reject(error);
+
+                    }
+                );
+
+
+                piper.on(
+                    "close",
+                    code => {
+
+                        if (code !== 0) {
+
+                            reject(
+                                new Error(
+                                    `Piper exited with code ${code}: ${stderr}`
+                                )
+                            );
+
+                            return;
+
+                        }
+
+
+                        resolve();
+
+                    }
+                );
+
+
+                piper.stdin.write(
+                    text.trim()
+                );
+
+                piper.stdin.end();
+
+            }
+        );
+
+
+        /* ---------------------------------------------
+           CHECK OUTPUT
+           --------------------------------------------- */
+
+        if (
+            !fs.existsSync(outputFile)
+        ) {
+
+            throw new Error(
+                "Piper n'a produit aucun fichier audio"
+            );
+
+        }
+
+
+        const stats =
+            fs.statSync(outputFile);
+
+
+        if (stats.size === 0) {
+
+            throw new Error(
+                "Le fichier audio est vide"
+            );
+
+        }
+
+
+        console.log(
+            `[AUDIO] WAV généré: ${stats.size} octets`
+        );
+
+
+        /* ---------------------------------------------
+           RESPONSE
+           --------------------------------------------- */
+
+        res.setHeader(
+            "Content-Type",
+            "audio/wav"
+        );
+
+        res.setHeader(
+            "Content-Length",
+            stats.size
+        );
+
+        res.setHeader(
+            "Cache-Control",
+            "no-store"
+        );
+
+
+        const stream =
+            fs.createReadStream(
+                outputFile
+            );
+
+
+        stream.on(
+            "error",
+            error => {
+
+                console.error(
+                    "[AUDIO] Stream error:",
+                    error
+                );
+
+            }
+        );
+
+
+        stream.on(
+            "close",
+            () => {
+
+                fs.unlink(
+                    outputFile,
+                    () => {}
+                );
+
+                outputFile = null;
+
+            }
+        );
+
+
+        stream.pipe(res);
+
+
+    } catch (error) {
+
+        console.error(
+            "[AUDIO] Exception:",
+            error
+        );
+
+
+        if (
+            outputFile &&
+            fs.existsSync(outputFile)
+        ) {
+
+            fs.unlink(
+                outputFile,
+                () => {}
+            );
+
+        }
+
+
+        if (!res.headersSent) {
+
+            return res.status(500).json({
+
+                error:
+                    "Erreur lors de la génération audio"
+
+            });
+
+        }
+
+    }
 
 });
+
 
 /* =========================================================
    404
@@ -498,6 +734,7 @@ app.use((req, res) => {
 
 });
 
+
 /* =========================================================
    ERROR HANDLER
    ========================================================= */
@@ -510,6 +747,14 @@ app.use(
             error
         );
 
+        if (
+            res.headersSent
+        ) {
+
+            return next(error);
+
+        }
+
         res.status(500).json({
 
             error:
@@ -519,6 +764,7 @@ app.use(
 
     }
 );
+
 
 /* =========================================================
    START
@@ -550,11 +796,19 @@ app.listen(
         );
 
         console.log(
-            `Translation: LibreTranslate`
+            "Translation: LibreTranslate"
         );
 
         console.log(
             `LT URL     : ${LIBRETRANSLATE_URL}`
+        );
+
+        console.log(
+            "Audio      : Piper"
+        );
+
+        console.log(
+            `Piper      : ${PIPER_BIN}`
         );
 
         console.log(
